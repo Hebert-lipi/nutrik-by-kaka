@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand colors */
+  --color-primary: 88 170 65;
+  --color-on-primary: 255 255 255;
+
+  --color-secondary: 30 120 68;
+  --color-on-secondary: 255 255 255;
+
+  --color-yellow: 245 197 66;
+  --color-orange: 255 151 75;
+
+  /* Neutrals */
+  --color-neutral-50: 250 250 251;
+  --color-neutral-100: 245 247 250;
+  --color-neutral-200: 229 231 235;
+  --color-neutral-300: 209 213 219;
+  --color-neutral-400: 156 163 175;
+  --color-neutral-500: 107 114 128;
+  --color-neutral-600: 75 85 99;
+  --color-neutral-700: 55 65 81;
+  --color-neutral-800: 31 41 55;
+  --color-neutral-900: 15 23 42;
+
+  /* Background tones */
+  --color-bg-0: 255 255 255;
+  --color-bg-1: 245 247 250;
+  --color-bg-2: 241 245 248;
+
+  /* Text hierarchy */
+  --color-text-primary: 15 23 42;
+  --color-text-secondary: 51 65 85;
+  --color-text-muted: 107 114 128;
+
+  /* Focus ring */
+  --color-ring: 90 170 65;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: rgb(var(--color-bg-1));
+  color: rgb(var(--color-text-primary));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
