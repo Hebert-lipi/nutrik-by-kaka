@@ -4,8 +4,10 @@ import * as React from "react";
 import {
   loadDraftPatients,
   loadDraftPlans,
+  normalizePlan,
   saveDraftPatients,
   saveDraftPlans,
+  upsertDraftPlan,
   type DraftPatient,
   type DraftPlan,
 } from "@/lib/draft-storage";
@@ -57,9 +59,14 @@ export function useDraftPlans() {
   }, [refresh]);
 
   const addPlan = React.useCallback((input: Omit<DraftPlan, "id">) => {
-    const next: DraftPlan[] = [...loadDraftPlans(), { ...input, id: crypto.randomUUID() }];
-    saveDraftPlans(next);
-    setPlans(next);
+    const plan = normalizePlan({ ...input, id: crypto.randomUUID() });
+    upsertDraftPlan(plan);
+    setPlans(loadDraftPlans());
+  }, []);
+
+  const upsertPlan = React.useCallback((plan: DraftPlan) => {
+    upsertDraftPlan(plan);
+    setPlans(loadDraftPlans());
   }, []);
 
   const removePlan = React.useCallback((id: string) => {
@@ -78,7 +85,7 @@ export function useDraftPlans() {
     setPlans(next);
   }, []);
 
-  return { plans, addPlan, removePlan, togglePublish, refresh };
+  return { plans, addPlan, upsertPlan, removePlan, togglePublish, refresh };
 }
 
 export function useDraftSummary() {

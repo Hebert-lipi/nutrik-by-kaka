@@ -229,7 +229,7 @@ export default function DashboardPage() {
               <EmptyState
                 title="Nenhum plano ainda"
                 description="Crie um plano para preencher esta lista."
-                action={{ label: "Criar plano", onClick: () => router.push("/diet-plans") }}
+                action={{ label: "Criar plano", onClick: () => router.push("/diet-plans/new") }}
                 hideIllustration
               />
             ) : (
@@ -298,7 +298,7 @@ export default function DashboardPage() {
               </Button>
             </div>
             <Link
-              href="/diet-plans"
+              href="/diet-plans/new"
               className="group flex items-center justify-between gap-3 rounded-2xl border border-neutral-200/70 bg-gradient-to-br from-primary/[0.07] to-transparent px-4 py-4 transition-all hover:border-primary/25 hover:shadow-premium-sm"
             >
               <div>

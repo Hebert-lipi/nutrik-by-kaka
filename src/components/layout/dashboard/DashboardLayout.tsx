@@ -14,7 +14,8 @@ const routeTitle: Record<string, string> = {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isDietRoute = pathname.includes("/diet");
+  const isPatientDietRoute = /\/patients\/[^/]+\/diet$/.test(pathname);
+  const isPlanBuilderRoute = pathname.includes("/diet-plans/new") || /\/diet-plans\/[^/]+\/edit$/.test(pathname);
 
   let finalTitle = "Nutrik by Kaká";
   for (const [route, title] of Object.entries(routeTitle)) {
@@ -24,7 +25,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (isDietRoute) finalTitle = "Cardápio saudável";
+  if (isPlanBuilderRoute) finalTitle = "Construtor de plano";
+  else if (isPatientDietRoute) finalTitle = "Cardápio saudável";
 
   return (
     <div className="min-h-dvh bg-bg-1">
