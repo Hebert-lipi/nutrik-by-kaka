@@ -9,10 +9,22 @@ import { supabase } from "@/lib/supabaseClient";
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [linkSent, setLinkSent] = React.useState(false);
   const [status, setStatus] = React.useState<null | { ok: boolean; message: string }>(null);
+  const sendingRef = React.useRef(false);
+
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    if (linkSent) {
+      setLinkSent(false);
+      setStatus(null);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (sendingRef.current || loading || linkSent) return;
+
     setStatus(null);
     const trimmed = email.trim();
     if (!trimmed || !trimmed.includes("@")) {
@@ -20,6 +32,7 @@ export default function LoginPage() {
       return;
     }
 
+    sendingRef.current = true;
     setLoading(true);
     try {
       const baseUrl =
@@ -33,16 +46,22 @@ export default function LoginPage() {
       });
 
       if (error) {
+        const isRateLimited =
+          error.status === 429 ||
+          /429|rate limit|too many requests/i.test(error.message ?? "");
         setStatus({
           ok: false,
-          message: "Não foi possível enviar o link de acesso. Tente novamente.",
+          message: isRateLimited
+            ? "Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente."
+            : "Não foi possível enviar o link de acesso. Tente novamente.",
         });
         return;
       }
 
+      setLinkSent(true);
       setStatus({
         ok: true,
-        message: "Verifique seu e-mail",
+        message: "Verifique seu e-mail para acessar",
       });
     } catch {
       setStatus({
@@ -50,6 +69,7 @@ export default function LoginPage() {
         message: "Erro de rede. Tente novamente em instantes.",
       });
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }
@@ -75,12 +95,18 @@ export default function LoginPage() {
               inputMode="email"
               placeholder="seuemail@dominio.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => handleEmailChange(e.target.value)}
               autoComplete="email"
+              disabled={loading}
             />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto rounded-lg px-6">
+              <Button
+                type="submit"
+                disabled={loading || linkSent}
+                aria-busy={loading}
+                className="w-full sm:w-auto rounded-lg px-6"
+              >
                 {loading ? "Enviando..." : "Enviar link de acesso"}
               </Button>
 
