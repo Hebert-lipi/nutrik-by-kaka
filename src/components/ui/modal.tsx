@@ -12,9 +12,11 @@ export type ModalProps = {
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  /** Usado para esconder título do modal na impressão (ex.: pré-visualização de plano). */
+  variant?: "default" | "planPreview";
 };
 
-export function Modal({ open, onClose, title, description, children, footer, className }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, className, variant = "default" }: ModalProps) {
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -39,7 +41,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-neutral-900/40 p-4 backdrop-blur-sm sm:items-center"
+      className="nutrik-modal-overlay fixed inset-0 z-[100] flex items-end justify-center bg-neutral-900/40 p-4 backdrop-blur-sm sm:items-center"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -51,6 +53,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         aria-labelledby="nutrik-modal-title"
         className={cn(
           "max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-neutral-200/70 bg-bg-0 shadow-[0_24px_64px_-12px_rgba(15,23,42,0.16)]",
+          variant === "planPreview" && "nutrik-plan-preview-dialog",
           className,
         )}
         onMouseDown={(e) => e.stopPropagation()}

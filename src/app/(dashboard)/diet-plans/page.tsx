@@ -11,13 +11,27 @@ import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
-import { useDraftPlans } from "@/hooks/use-draft-data";
+import { useDraftPatients, useDraftPlans } from "@/hooks/use-draft-data";
 import { IconDietPlan } from "@/components/layout/dashboard/icons";
 import { buttonClassName } from "@/components/ui/button";
+import { cloneEntirePlan } from "@/lib/diet-plan-factory";
+import type { DraftPlan } from "@/lib/draft-storage";
 
 export default function DietPlansPage() {
   const router = useRouter();
-  const { plans, removePlan, togglePublish } = useDraftPlans();
+  const { patients } = useDraftPatients();
+  const { plans, removePlan, togglePublish, upsertPlan } = useDraftPlans();
+
+  function patientLabel(id: string | null) {
+    if (!id) return null;
+    return patients.find((p) => p.id === id)?.name ?? null;
+  }
+
+  function duplicatePlan(pl: DraftPlan) {
+    const copy = cloneEntirePlan(pl);
+    upsertPlan(copy);
+    router.push(`/diet-plans/${copy.id}/edit`);
+  }
   const [removeId, setRemoveId] = React.useState<string | null>(null);
 
   return (
@@ -54,6 +68,7 @@ export default function DietPlansPage() {
                 <tr>
                   <TableHead>Plano</TableHead>
                   <TableHead>Refeições</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Pacientes</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -62,7 +77,7 @@ export default function DietPlansPage() {
               <tbody>
                 {plans.length === 0 ? (
                   <tr>
-                    <TableCell colSpan={5} className="border-0 p-5 md:p-8">
+                    <TableCell colSpan={6} className="border-0 p-5 md:p-8">
                       <EmptyState
                         title="Nenhum plano na biblioteca"
                         description="Abra o construtor para montar refeições e alimentos como em um app profissional de nutrição."
@@ -94,18 +109,33 @@ export default function DietPlansPage() {
                         <Chip tone="primary">{pl.meals.length} refeição(ões)</Chip>
                       </TableCell>
                       <TableCell>
+                        <div className="flex flex-col gap-1.5">
+                          <Chip tone={pl.planKind === "patient_plan" ? "success" : "muted"}>
+                            {pl.planKind === "patient_plan" ? "Paciente" : "Modelo"}
+                          </Chip>
+                          <span className="text-[10px] font-bold text-text-muted">v{pl.currentVersionNumber}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <StatusPill status={pl.status} />
                       </TableCell>
                       <TableCell>
-                        <Chip tone={pl.patientCount > 0 ? "primary" : "neutral"}>
-                          {pl.patientCount === 0 ? "Sem pacientes" : `${pl.patientCount} paciente${pl.patientCount === 1 ? "" : "s"}`}
-                        </Chip>
+                        {pl.planKind === "patient_plan" && pl.linkedPatientId ? (
+                          <Chip tone="primary">{patientLabel(pl.linkedPatientId) ?? "Paciente"}</Chip>
+                        ) : (
+                          <Chip tone={pl.patientCount > 0 ? "primary" : "neutral"}>
+                            {pl.patientCount === 0 ? "—" : `${pl.patientCount} uso(s) est.`}
+                          </Chip>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-wrap justify-end gap-2">
                           <Link href={`/diet-plans/${pl.id}/edit`} className={buttonClassName("outline", "sm", "rounded-full")}>
                             Editar
                           </Link>
+                          <Button type="button" variant="outline" size="sm" onClick={() => duplicatePlan(pl)}>
+                            Duplicar
+                          </Button>
                           <Button type="button" variant="secondary" size="sm" onClick={() => togglePublish(pl.id)}>
                             {pl.status === "published" ? "Despublicar" : "Publicar"}
                           </Button>

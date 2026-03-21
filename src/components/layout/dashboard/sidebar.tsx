@@ -21,7 +21,7 @@ export function Sidebar({ currentPath }: { currentPath: string }) {
   );
 
   return (
-    <aside className="hidden w-[272px] shrink-0 md:block">
+    <aside className="nutrik-print-hide hidden w-[272px] shrink-0 md:block">
       <div className="flex h-full min-h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-neutral-200/50 bg-bg-0/95 p-4 shadow-card ring-1 ring-black/[0.02] backdrop-blur-sm md:min-h-[calc(100dvh-3rem)]">
         <div className="flex items-center gap-3 border-b border-neutral-100/90 pb-5">
           <BrandLogo size={44} />

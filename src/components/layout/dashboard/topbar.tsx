@@ -4,7 +4,7 @@ import { IconBell, IconSearch } from "./icons";
 
 export function Topbar({ title, currentPath }: { title: string; currentPath: string }) {
   return (
-    <header className="sticky top-0 z-20">
+    <header className="nutrik-print-hide sticky top-0 z-20">
       <div className="-mx-4 rounded-2xl border border-neutral-200/50 bg-bg-0/90 shadow-soft ring-1 ring-black/[0.02] backdrop-blur-md md:mx-0">
         <div className="flex flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6 md:py-5">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">

@@ -5,21 +5,59 @@ export type DraftPatient = {
   planLabel: string;
 };
 
-export type PlanFoodUnit = "g" | "ml" | "unidade";
+/** Unidade principal da porção (quantidade + unidade). */
+export type PlanFoodUnit = "g" | "ml" | "unidade" | "porção";
 
-export type DraftPlanFood = {
+/** Opção de alimento dentro de um grupo (ex.: uma das proteínas possíveis). */
+export type DraftPlanFoodOption = {
   id: string;
   name: string;
   quantity: number;
   unit: PlanFoodUnit;
-  /** vazio no JSON pode ser omitido; na UI tratamos como string */
-  note?: string;
+  /** Medida caseira opcional (ex.: 1 colher de sopa, 1 fatia). */
+  householdMeasure: string;
+  /** Gramas equivalentes opcionais (0 = não informado). */
+  grams: number;
+  /** ml equivalentes opcionais (0 = não informado). */
+  ml: number;
+  note: string;
+  /** Receita / modo de preparo opcional. */
+  recipe: string;
+  /** URL da imagem (futuro: upload); vazio se não houver. */
+  imageUrl: string;
 };
 
+/** Grupo dentro da refeição (bebida, proteína, etc.) com várias opções equivalentes. */
+export type DraftPlanFoodGroup = {
+  id: string;
+  name: string;
+  options: DraftPlanFoodOption[];
+};
+
+/** Refeição com horário, observação e grupos. */
 export type DraftPlanMeal = {
   id: string;
   name: string;
-  items: DraftPlanFood[];
+  /** Horário sugerido (formato HH:mm). */
+  time: string;
+  /** Observações da refeição (orientações clínicas, substituições, etc.). */
+  observation: string;
+  groups: DraftPlanFoodGroup[];
+};
+
+export type PlanKind = "template" | "patient_plan";
+
+/** Snapshot de uma versão salva (base para histórico e futura restauração). */
+export type DraftPlanRevisionSnapshot = {
+  id: string;
+  savedAt: string;
+  versionNumber: number;
+  name: string;
+  description: string;
+  status: "draft" | "published";
+  planKind: PlanKind;
+  linkedPatientId: string | null;
+  meals: DraftPlanMeal[];
 };
 
 export type DraftPlan = {
@@ -27,32 +65,65 @@ export type DraftPlan = {
   name: string;
   description: string;
   status: "draft" | "published";
-  /** Pacientes vinculados (opcional / número informativo) */
+  /**
+   * @deprecated Preferir planKind + linkedPatientId. Mantido para compatibilidade e listagens.
+   */
   patientCount: number;
+  /** Plano modelo (biblioteca) ou atribuído a um paciente. */
+  planKind: PlanKind;
+  /** ID do paciente em `DraftPatient` quando `patient_plan`. */
+  linkedPatientId: string | null;
+  /** Nome do profissional (cabeçalho PDF / documento). */
+  professionalName: string;
+  /** Registro profissional opcional (ex.: CRN). */
+  professionalRegistration: string;
+  /** Nome exibido no cabeçalho quando não há paciente vinculado ou para sobrescrever rótulo. */
+  patientHeaderLabel: string;
   meals: DraftPlanMeal[];
+  /** Histórico de versões salvas (metadados + refeições naquele momento). */
+  revisionHistory: DraftPlanRevisionSnapshot[];
+  /** Número monotônico da versão atual (incrementa a cada salvamento persistido). */
+  currentVersionNumber: number;
 };
 
-const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade"];
+const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade", "porção"];
 
 export function isPlanFoodUnit(u: string): u is PlanFoodUnit {
   return UNITS.includes(u as PlanFoodUnit);
 }
 
-export function createEmptyFoodItem(): DraftPlanFood {
+export function createEmptyFoodOption(): DraftPlanFoodOption {
   return {
     id: crypto.randomUUID(),
     name: "",
     quantity: 0,
     unit: "g",
+    householdMeasure: "",
+    grams: 0,
+    ml: 0,
     note: "",
+    recipe: "",
+    imageUrl: "",
   };
 }
 
-export function createEmptyMeal(name = "Nova refeição"): DraftPlanMeal {
+export function createEmptyFoodGroup(name = "Novo grupo"): DraftPlanFoodGroup {
   return {
     id: crypto.randomUUID(),
     name,
-    items: [createEmptyFoodItem()],
+    options: [createEmptyFoodOption()],
+  };
+}
+
+const DEFAULT_MEAL_TIMES = ["07:30", "12:30", "15:30", "19:30", "21:00"];
+
+export function createEmptyMeal(name = "Nova refeição", index = 0): DraftPlanMeal {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    time: DEFAULT_MEAL_TIMES[index % DEFAULT_MEAL_TIMES.length] ?? "08:00",
+    observation: "",
+    groups: [createEmptyFoodGroup("Bebida"), createEmptyFoodGroup("Proteína")],
   };
 }
 
@@ -68,8 +139,9 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function normalizeFood(raw: unknown): DraftPlanFood {
-  if (!raw || typeof raw !== "object") return createEmptyFoodItem();
+/** Migra item legado (lista plana) para opção completa. */
+function legacyItemToOption(raw: unknown): DraftPlanFoodOption {
+  if (!raw || typeof raw !== "object") return createEmptyFoodOption();
   const o = raw as Record<string, unknown>;
   const qty = Number(o.quantity);
   const unitStr = typeof o.unit === "string" ? o.unit : "g";
@@ -78,23 +150,100 @@ function normalizeFood(raw: unknown): DraftPlanFood {
     name: typeof o.name === "string" ? o.name : "",
     quantity: Number.isFinite(qty) ? qty : 0,
     unit: isPlanFoodUnit(unitStr) ? unitStr : "g",
+    householdMeasure: typeof o.householdMeasure === "string" ? o.householdMeasure : "",
+    grams: Number.isFinite(Number(o.grams)) ? Math.max(0, Number(o.grams)) : 0,
+    ml: Number.isFinite(Number(o.ml)) ? Math.max(0, Number(o.ml)) : 0,
     note: typeof o.note === "string" ? o.note : "",
+    recipe: typeof o.recipe === "string" ? o.recipe : "",
+    imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : "",
   };
 }
 
-function normalizeMeal(raw: unknown): DraftPlanMeal {
-  if (!raw || typeof raw !== "object") return createEmptyMeal();
+function normalizeFoodOption(raw: unknown): DraftPlanFoodOption {
+  const opt = legacyItemToOption(raw);
+  return opt;
+}
+
+function normalizeGroup(raw: unknown): DraftPlanFoodGroup {
+  if (!raw || typeof raw !== "object") return createEmptyFoodGroup();
   const o = raw as Record<string, unknown>;
-  const itemsRaw = o.items;
-  const items = Array.isArray(itemsRaw) ? itemsRaw.map(normalizeFood) : [];
+  const optsRaw = o.options;
+  const options = Array.isArray(optsRaw) ? optsRaw.map(normalizeFoodOption) : [];
   return {
     id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
-    name: typeof o.name === "string" && o.name.trim() ? o.name : "Refeição",
-    items: items.length ? items : [createEmptyFoodItem()],
+    name: typeof o.name === "string" && o.name.trim() ? o.name : "Grupo",
+    options: options.length ? options : [createEmptyFoodOption()],
   };
 }
 
-/** Aceita planos antigos (sem `meals` / `description`) e normaliza. */
+function migrateLegacyMeal(o: Record<string, unknown>): DraftPlanMeal {
+  const itemsRaw = o.items;
+  const groupsRaw = o.groups;
+  const name = typeof o.name === "string" && o.name.trim() ? o.name : "Refeição";
+  const time = typeof o.time === "string" && o.time.trim() ? o.time : "08:00";
+  const observation = typeof o.observation === "string" ? o.observation : "";
+
+  if (Array.isArray(groupsRaw) && groupsRaw.length) {
+    return {
+      id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
+      name,
+      time,
+      observation,
+      groups: groupsRaw.map(normalizeGroup),
+    };
+  }
+
+  if (Array.isArray(itemsRaw) && itemsRaw.length) {
+    const options = itemsRaw.map(legacyItemToOption);
+    return {
+      id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
+      name,
+      time,
+      observation,
+      groups: [
+        {
+          id: crypto.randomUUID(),
+          name: "Alimentos",
+          options: options.length ? options : [createEmptyFoodOption()],
+        },
+      ],
+    };
+  }
+
+  return {
+    id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
+    name,
+    time,
+    observation,
+    groups: [createEmptyFoodGroup("Grupo alimentar")],
+  };
+}
+
+function normalizeMeal(raw: unknown, index: number): DraftPlanMeal {
+  if (!raw || typeof raw !== "object") return createEmptyMeal("Refeição", index);
+  return migrateLegacyMeal(raw as Record<string, unknown>);
+}
+
+function normalizeRevision(raw: unknown): DraftPlanRevisionSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const mealsRaw = o.meals;
+  if (!Array.isArray(mealsRaw)) return null;
+  const vn = Number(o.versionNumber);
+  return {
+    id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
+    savedAt: typeof o.savedAt === "string" ? o.savedAt : new Date().toISOString(),
+    versionNumber: Number.isFinite(vn) ? Math.max(1, Math.floor(vn)) : 1,
+    name: typeof o.name === "string" ? o.name : "",
+    description: typeof o.description === "string" ? o.description : "",
+    status: o.status === "published" ? "published" : "draft",
+    planKind: o.planKind === "patient_plan" ? "patient_plan" : "template",
+    linkedPatientId: typeof o.linkedPatientId === "string" ? o.linkedPatientId : null,
+    meals: mealsRaw.map((m, i) => normalizeMeal(m, i)),
+  };
+}
+
+/** Aceita planos antigos (refeições com `items` em lista plana) e normaliza. */
 export function normalizePlan(raw: unknown): DraftPlan {
   if (!raw || typeof raw !== "object") {
     return {
@@ -103,20 +252,58 @@ export function normalizePlan(raw: unknown): DraftPlan {
       description: "",
       status: "draft",
       patientCount: 0,
-      meals: [createEmptyMeal("Café da manhã")],
+      planKind: "template",
+      linkedPatientId: null,
+      professionalName: "",
+      professionalRegistration: "",
+      patientHeaderLabel: "",
+      meals: [createEmptyMeal("Café da manhã", 0)],
+      revisionHistory: [],
+      currentVersionNumber: 1,
     };
   }
   const o = raw as Record<string, unknown>;
   const mealsRaw = o.meals;
-  const meals = Array.isArray(mealsRaw) ? mealsRaw.map(normalizeMeal) : [];
+  const meals = Array.isArray(mealsRaw) ? mealsRaw.map((m, i) => normalizeMeal(m, i)) : [];
   const pc = Number(o.patientCount);
+  const revRaw = o.revisionHistory;
+  const revisions = Array.isArray(revRaw) ? revRaw.map(normalizeRevision).filter(Boolean) as DraftPlanRevisionSnapshot[] : [];
+  const cv = Number(o.currentVersionNumber);
+
+  const planKind: PlanKind = o.planKind === "patient_plan" ? "patient_plan" : "template";
+  const linked =
+    typeof o.linkedPatientId === "string" && o.linkedPatientId.trim() ? o.linkedPatientId.trim() : null;
+
   return {
     id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
     name: typeof o.name === "string" ? o.name : "",
     description: typeof o.description === "string" ? o.description : "",
     status: o.status === "published" ? "published" : "draft",
-    patientCount: Number.isFinite(pc) ? Math.max(0, Math.floor(pc)) : 0,
-    meals: meals.length ? meals : [createEmptyMeal("Café da manhã")],
+    patientCount: Number.isFinite(pc) ? Math.max(0, Math.floor(pc)) : linked ? 1 : 0,
+    planKind: linked ? "patient_plan" : planKind,
+    linkedPatientId: linked,
+    professionalName: typeof o.professionalName === "string" ? o.professionalName : "",
+    professionalRegistration: typeof o.professionalRegistration === "string" ? o.professionalRegistration : "",
+    patientHeaderLabel: typeof o.patientHeaderLabel === "string" ? o.patientHeaderLabel : "",
+    meals: meals.length ? meals : [createEmptyMeal("Café da manhã", 0)],
+    revisionHistory: revisions.slice(-20),
+    currentVersionNumber: Number.isFinite(cv) ? Math.max(1, Math.floor(cv)) : 1,
+  };
+}
+
+/** Cria entrada de histórico a partir do plano atual (antes de incrementar versão no salvamento). */
+export function snapshotPlanForHistory(plan: DraftPlan, versionNumber: number): DraftPlanRevisionSnapshot {
+  const mealsClone = JSON.parse(JSON.stringify(plan.meals)) as DraftPlanMeal[];
+  return {
+    id: crypto.randomUUID(),
+    savedAt: new Date().toISOString(),
+    versionNumber,
+    name: plan.name,
+    description: plan.description,
+    status: plan.status,
+    planKind: plan.planKind,
+    linkedPatientId: plan.linkedPatientId,
+    meals: mealsClone,
   };
 }
 

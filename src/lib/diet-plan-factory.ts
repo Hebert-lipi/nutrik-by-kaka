@@ -1,7 +1,62 @@
 import type { DraftPlan, DraftPlanMeal } from "@/lib/draft-storage";
-import { createEmptyFoodItem, createEmptyMeal } from "@/lib/draft-storage";
+import {
+  createEmptyFoodGroup,
+  createEmptyFoodOption,
+  createEmptyMeal,
+} from "@/lib/draft-storage";
 
-/** Estado inicial para um plano novo no construtor (nomes típicos, sem alimentos preenchidos). */
+function deepCloneMeals(meals: DraftPlanMeal[]): DraftPlanMeal[] {
+  return JSON.parse(JSON.stringify(meals)) as DraftPlanMeal[];
+}
+
+/** Cópia profunda do plano com novos IDs (novo documento na biblioteca). */
+export function cloneEntirePlan(plan: DraftPlan): DraftPlan {
+  const baseName = plan.name.trim();
+  const name = baseName ? `Cópia — ${baseName}`.slice(0, 160) : "Cópia — Plano sem nome";
+  const meals = deepCloneMeals(plan.meals).map((m) => ({
+    ...m,
+    id: crypto.randomUUID(),
+    groups: m.groups.map((g) => ({
+      ...g,
+      id: crypto.randomUUID(),
+      options: g.options.map((opt) => ({ ...opt, id: crypto.randomUUID() })),
+    })),
+  }));
+  return {
+    id: crypto.randomUUID(),
+    name,
+    description: plan.description,
+    status: "draft",
+    patientCount: 0,
+    planKind: "template",
+    linkedPatientId: null,
+    professionalName: plan.professionalName,
+    professionalRegistration: plan.professionalRegistration,
+    patientHeaderLabel: plan.patientHeaderLabel,
+    meals,
+    revisionHistory: [],
+    currentVersionNumber: 1,
+  };
+}
+
+/** Reordena refeição de `fromIndex` para `toIndex`. */
+export function reorderMeals(meals: DraftPlanMeal[], fromIndex: number, toIndex: number): DraftPlanMeal[] {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= meals.length ||
+    toIndex >= meals.length
+  ) {
+    return meals;
+  }
+  const next = [...meals];
+  const [removed] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, removed!);
+  return next;
+}
+
+/** Estado inicial para um plano novo no construtor. */
 export function createNewPlanSkeleton(): DraftPlan {
   return {
     id: crypto.randomUUID(),
@@ -9,7 +64,19 @@ export function createNewPlanSkeleton(): DraftPlan {
     description: "",
     status: "draft",
     patientCount: 0,
-    meals: [createEmptyMeal("Café da manhã"), createEmptyMeal("Almoço"), createEmptyMeal("Lanche"), createEmptyMeal("Jantar")],
+    planKind: "template",
+    linkedPatientId: null,
+    professionalName: "",
+    professionalRegistration: "",
+    patientHeaderLabel: "",
+    meals: [
+      createEmptyMeal("Café da manhã", 0),
+      createEmptyMeal("Almoço", 1),
+      createEmptyMeal("Lanche", 2),
+      createEmptyMeal("Jantar", 3),
+    ],
+    revisionHistory: [],
+    currentVersionNumber: 1,
   };
 }
 
@@ -17,7 +84,13 @@ function newIdsForMeal(meal: DraftPlanMeal): DraftPlanMeal {
   return {
     id: crypto.randomUUID(),
     name: `${meal.name} (cópia)`,
-    items: meal.items.map((f) => ({ ...f, id: crypto.randomUUID() })),
+    time: meal.time,
+    observation: meal.observation,
+    groups: meal.groups.map((g) => ({
+      ...g,
+      id: crypto.randomUUID(),
+      options: g.options.map((opt) => ({ ...opt, id: crypto.randomUUID() })),
+    })),
   };
 }
 
@@ -39,18 +112,51 @@ export function moveMeal(meals: DraftPlanMeal[], mealId: string, dir: -1 | 1): D
 
 export function removeMealFromPlan(meals: DraftPlanMeal[], mealId: string): DraftPlanMeal[] {
   const next = meals.filter((m) => m.id !== mealId);
-  return next.length ? next : [createEmptyMeal("Refeição")];
+  return next.length ? next : [createEmptyMeal("Refeição", 0)];
 }
 
-export function addFoodToMeal(meals: DraftPlanMeal[], mealId: string): DraftPlanMeal[] {
-  return meals.map((m) => (m.id === mealId ? { ...m, items: [...m.items, createEmptyFoodItem()] } : m));
+export function addGroupToMeal(meals: DraftPlanMeal[], mealId: string, groupName?: string): DraftPlanMeal[] {
+  return meals.map((m) =>
+    m.id === mealId ? { ...m, groups: [...m.groups, createEmptyFoodGroup(groupName ?? "Novo grupo")] } : m,
+  );
 }
 
-export function removeFoodFromMeal(meals: DraftPlanMeal[], mealId: string, foodId: string): DraftPlanMeal[] {
+export function removeGroupFromMeal(meals: DraftPlanMeal[], mealId: string, groupId: string): DraftPlanMeal[] {
   return meals.map((m) => {
     if (m.id !== mealId) return m;
-    const items = m.items.filter((f) => f.id !== foodId);
-    return { ...m, items: items.length ? items : [createEmptyFoodItem()] };
+    const groups = m.groups.filter((g) => g.id !== groupId);
+    return { ...m, groups: groups.length ? groups : [createEmptyFoodGroup("Grupo alimentar")] };
+  });
+}
+
+export function addOptionToGroup(meals: DraftPlanMeal[], mealId: string, groupId: string): DraftPlanMeal[] {
+  return meals.map((m) => {
+    if (m.id !== mealId) return m;
+    return {
+      ...m,
+      groups: m.groups.map((g) =>
+        g.id === groupId ? { ...g, options: [...g.options, createEmptyFoodOption()] } : g,
+      ),
+    };
+  });
+}
+
+export function removeOptionFromGroup(
+  meals: DraftPlanMeal[],
+  mealId: string,
+  groupId: string,
+  optionId: string,
+): DraftPlanMeal[] {
+  return meals.map((m) => {
+    if (m.id !== mealId) return m;
+    return {
+      ...m,
+      groups: m.groups.map((g) => {
+        if (g.id !== groupId) return g;
+        const options = g.options.filter((o) => o.id !== optionId);
+        return { ...g, options: options.length ? options : [createEmptyFoodOption()] };
+      }),
+    };
   });
 }
 

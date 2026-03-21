@@ -55,3 +55,37 @@ body {
   box-sizing: border-box;
 }
 
+/* Impressão a partir da pré-visualização do plano (Construtor) */
+@media print {
+  body[data-nutrik-printing-plan="true"] .nutrik-print-hide {
+    display: none !important;
+  }
+
+  body[data-nutrik-printing-plan="true"] .nutrik-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: white !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+
+  body[data-nutrik-printing-plan="true"] .nutrik-modal-overlay [role="dialog"] {
+    max-height: none !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  body[data-nutrik-printing-plan="true"] .nutrik-plan-preview-dialog > div:first-child {
+    display: none !important;
+  }
+
+  body[data-nutrik-printing-plan="true"] {
+    background: white !important;
+  }
+}
+
