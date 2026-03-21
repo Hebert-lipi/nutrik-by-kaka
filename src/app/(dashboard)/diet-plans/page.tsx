@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Table, TableHead, TableCell } from "@/components/ui/table";
+import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
+import { Chip } from "@/components/ui/chip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
@@ -103,23 +104,35 @@ export default function DietPlansPage() {
                   </tr>
                 ) : (
                   plans.map((pl) => (
-                    <tr key={pl.id} className="group hover:bg-neutral-50/70">
-                      <TableCell className="font-semibold text-text-primary">{pl.name}</TableCell>
+                    <TableRow key={pl.id}>
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-bold text-text-primary">{pl.name}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Chip tone="muted">Biblioteca</Chip>
+                            {pl.status === "published" ? <Chip tone="success">Ativo</Chip> : <Chip tone="yellow">Em edição</Chip>}
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <StatusPill status={pl.status} />
                       </TableCell>
-                      <TableCell className="text-text-secondary">{pl.patientCount}</TableCell>
+                      <TableCell>
+                        <Chip tone={pl.patientCount > 0 ? "primary" : "neutral"}>
+                          {pl.patientCount === 0 ? "Sem pacientes" : `${pl.patientCount} paciente${pl.patientCount === 1 ? "" : "s"}`}
+                        </Chip>
+                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => togglePublish(pl.id)}>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button type="button" variant="secondary" size="sm" onClick={() => togglePublish(pl.id)}>
                             {pl.status === "published" ? "Despublicar" : "Publicar"}
                           </Button>
-                          <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => setRemoveId(pl.id)}>
+                          <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={() => setRemoveId(pl.id)}>
                             Excluir
                           </Button>
                         </div>
                       </TableCell>
-                    </tr>
+                    </TableRow>
                   ))
                 )}
               </tbody>

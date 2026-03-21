@@ -5,11 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Table, TableHead, TableCell } from "@/components/ui/table";
+import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
+import { Chip } from "@/components/ui/chip";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { useDraftPatients } from "@/hooks/use-draft-data";
 import { IconUsers } from "@/components/layout/dashboard/icons";
+
+function emailDomain(email: string) {
+  const at = email.indexOf("@");
+  if (at === -1) return null;
+  return email.slice(at + 1) || null;
+}
 
 export default function PatientsPage() {
   const { patients, addPatient, removePatient } = useDraftPatients();
@@ -104,10 +111,10 @@ export default function PatientsPage() {
                   </tr>
                 ) : (
                   patients.map((p) => (
-                    <tr key={p.id} className="group hover:bg-neutral-50/70">
+                    <TableRow key={p.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-small12 font-bold text-text-secondary">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-small12 font-bold text-text-secondary ring-1 ring-neutral-200/60 transition-colors group-hover/row:bg-primary/10 group-hover/row:text-primary group-hover/row:ring-primary/15">
                             {p.name
                               .split(/\s+/)
                               .slice(0, 2)
@@ -115,21 +122,31 @@ export default function PatientsPage() {
                               .join("")
                               .toUpperCase()}
                           </span>
-                          <span className="font-semibold text-text-primary">{p.name}</span>
+                          <div className="min-w-0">
+                            <span className="block font-semibold text-text-primary">{p.name}</span>
+                            <Chip tone="muted" className="mt-1.5 max-w-[12rem]">
+                              Diretório
+                            </Chip>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-text-secondary">{p.email}</TableCell>
+                      <TableCell className="text-text-secondary">
+                        <span className="block font-medium">{p.email}</span>
+                        {emailDomain(p.email) ? (
+                          <Chip tone="neutral" className="mt-2">
+                            {emailDomain(p.email)}
+                          </Chip>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
-                        <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-small12 font-semibold text-text-primary ring-1 ring-primary/15">
-                          {p.planLabel}
-                        </span>
+                        <Chip tone={p.planLabel === "—" ? "muted" : "primary"}>{p.planLabel}</Chip>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => setRemoveId(p.id)}>
+                        <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={() => setRemoveId(p.id)}>
                           Remover
                         </Button>
                       </TableCell>
-                    </tr>
+                    </TableRow>
                   ))
                 )}
               </tbody>

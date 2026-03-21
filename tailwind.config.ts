@@ -57,6 +57,9 @@ const config: Config = {
         card: "0 12px 40px rgba(15, 23, 42, 0.07)",
         soft: "0 8px 24px rgba(15, 23, 42, 0.06)",
         lift: "0 2px 8px rgba(15, 23, 42, 0.04)",
+        premium:
+          "0 1px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -2px rgba(15, 23, 42, 0.04), 0 22px 56px -18px rgba(15, 23, 42, 0.14)",
+        "premium-sm": "0 1px 0 rgba(15, 23, 42, 0.05), 0 12px 32px -14px rgba(15, 23, 42, 0.1)",
       },
       fontSize: {
         h1: ["2rem", { lineHeight: "2.25rem", fontWeight: "600" }], // 32px
