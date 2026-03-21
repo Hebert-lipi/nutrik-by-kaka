@@ -2,59 +2,72 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { EmptyTableRow } from "@/components/ui/empty-table-row";
+import { PageHeader } from "@/components/layout/dashboard/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableHead } from "@/components/ui/table";
 
 export default function PatientsPage() {
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-title16 font-extrabold text-text-primary">Patients</p>
-        <p className="mt-1 text-body14 text-text-secondary">Manage patient profiles and assign diets.</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Pacientes"
+        description="Gerencie fichas, contatos e vincule planos alimentares a cada pessoa atendida."
+      />
 
       <Card>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/15 border border-primary/25" />
+        <CardContent className="space-y-6 pt-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+                <span className="text-lg font-extrabold text-primary" aria-hidden>
+                  +
+                </span>
+              </div>
               <div>
-                <p className="text-body14 font-semibold text-text-secondary">Patient directory</p>
-                <p className="text-small12 text-neutral-500">Ready for a list + detail view</p>
+                <p className="text-title16 font-extrabold text-text-primary">Lista de pacientes</p>
+                <p className="mt-1 max-w-xl text-body14 text-text-secondary">
+                  Visualize todos os cadastros e acione ações em poucos cliques.
+                </p>
               </div>
             </div>
 
             <Button
               variant="primary"
-              className="rounded-lg"
-              onClick={() => alert("Add patient (MVP placeholder)")}
+              className="h-11 shrink-0 rounded-lg px-6"
+              onClick={() => alert("Adicionar paciente (em breve)")}
             >
-              Add patient
+              Novo paciente
             </Button>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-bg-0">
+          <div className="overflow-hidden rounded-xl border border-neutral-200/80 bg-bg-0 shadow-sm">
             <Table className="min-w-[560px]">
               <thead>
                 <tr>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Assigned diet</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead>Paciente</TableHead>
+                  <TableHead>E-mail</TableHead>
+                  <TableHead>Plano vinculado</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </tr>
               </thead>
               <tbody>
-                <EmptyTableRow colSpan={4} message="No patients yet. Add a patient to start a diet plan." />
+                <tr>
+                  <td colSpan={4} className="border-0 p-6 md:p-8">
+                    <EmptyState
+                      title="Sua lista está pronta"
+                      description="Assim que você cadastrar o primeiro paciente, os dados aparecerão nesta tabela."
+                      action={{
+                        label: "Cadastrar paciente",
+                        onClick: () => alert("Adicionar paciente (em breve)"),
+                      }}
+                    />
+                  </td>
+                </tr>
               </tbody>
             </Table>
           </div>
-
-          <p className="text-small12 text-neutral-500">
-            Tip: wire this list to Supabase in the next phase.
-          </p>
         </CardContent>
       </Card>
     </div>
   );
 }
-

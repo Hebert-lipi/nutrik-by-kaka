@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 import { IconClose, IconMenu } from "./icons";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/patients", label: "Patients" },
-  { href: "/diet-plans", label: "Diet Plans" },
+  { href: "/dashboard", label: "Painel" },
+  { href: "/patients", label: "Pacientes" },
+  { href: "/diet-plans", label: "Planos" },
 ];
 
 export function MobileNav({ currentPath }: { currentPath: string }) {
@@ -22,7 +22,7 @@ export function MobileNav({ currentPath }: { currentPath: string }) {
     <div className="md:hidden">
       <button
         type="button"
-        aria-label="Open navigation"
+        aria-label="Abrir menu de navegação"
         onClick={() => setOpen(true)}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-bg-0 shadow-soft border border-neutral-200 text-text-secondary"
       >
@@ -38,15 +38,15 @@ export function MobileNav({ currentPath }: { currentPath: string }) {
             onClick={() => setOpen(false)}
           />
 
-          <div className="absolute left-3 right-3 top-3 rounded-xl bg-bg-0 shadow-card border border-neutral-200 p-3">
+          <div className="absolute left-3 right-3 top-3 rounded-xl border border-neutral-200/80 bg-bg-0 p-4 shadow-card">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-body14 font-bold text-text-secondary">Nutrik</p>
-                <p className="text-small12 text-neutral-500">Nutrition MVP</p>
+                <p className="text-body14 font-extrabold text-text-primary">Nutrik</p>
+                <p className="text-small12 text-text-muted">by Kaká</p>
               </div>
               <button
                 type="button"
-                aria-label="Close navigation"
+                aria-label="Fechar menu"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-200 bg-bg-0 text-text-secondary"
               >

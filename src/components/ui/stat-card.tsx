@@ -13,13 +13,18 @@ export function StatCard({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl border border-neutral-200 bg-bg-0 p-4 shadow-soft", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-small12 font-semibold text-text-secondary">{title}</p>
-          <p className="mt-2 text-h3 font-extrabold">{value}</p>
+    <div
+      className={cn(
+        "rounded-xl border border-neutral-200/80 bg-bg-0 p-5 shadow-soft ring-1 ring-neutral-900/[0.02]",
+        className,
+      )}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-small12 font-semibold uppercase tracking-wide text-text-muted">{title}</p>
+          <p className="mt-3 text-h2 font-extrabold tracking-tight text-text-primary">{value}</p>
         </div>
-        {meta ? <div className="mt-1">{meta}</div> : null}
+        {meta ? <div className="shrink-0 text-right">{meta}</div> : null}
       </div>
     </div>
   );
