@@ -1,8 +1,16 @@
+/** Status clínico-operacional do paciente no diretório (não confundir com status do plano). */
+export type PatientClinicalStatus = "active" | "paused" | "archived";
+
 export type DraftPatient = {
   id: string;
   name: string;
   email: string;
   planLabel: string;
+  clinicalStatus?: PatientClinicalStatus;
+  /** Observações internas da nutricionista (texto livre). */
+  clinicalNotes?: string;
+  /** ISO 8601 — última atualização local do cadastro. */
+  updatedAt?: string;
 };
 
 /** Unidade principal da porção (quantidade + unidade). */
@@ -58,6 +66,10 @@ export type DraftPlanRevisionSnapshot = {
   planKind: PlanKind;
   linkedPatientId: string | null;
   meals: DraftPlanMeal[];
+  /** Rótulo exibido (ex.: e-mail do profissional). Em produção: nome ou ID do usuário. */
+  changedByLabel?: string;
+  /** Futuro: `auth.users.id` / `profiles.id` do Supabase. */
+  changedByUserId?: string | null;
 };
 
 export type DraftPlan = {
@@ -129,6 +141,33 @@ export function createEmptyMeal(name = "Nova refeição", index = 0): DraftPlanM
 
 const PATIENTS_KEY = "nutrik.draft.patients.v1";
 const PLANS_KEY = "nutrik.draft.plans.v1";
+
+/** Normaliza paciente salvo (inclui registros legados sem novos campos). */
+export function normalizeDraftPatient(raw: unknown): DraftPatient {
+  if (!raw || typeof raw !== "object") {
+    return {
+      id: crypto.randomUUID(),
+      name: "",
+      email: "",
+      planLabel: "—",
+      clinicalStatus: "active",
+      clinicalNotes: "",
+    };
+  }
+  const o = raw as Record<string, unknown>;
+  const status = o.clinicalStatus ?? o.status;
+  const clinicalStatus: PatientClinicalStatus =
+    status === "paused" || status === "archived" || status === "active" ? status : "active";
+  return {
+    id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
+    name: typeof o.name === "string" ? o.name : "",
+    email: typeof o.email === "string" ? o.email : "",
+    planLabel: typeof o.planLabel === "string" && o.planLabel.trim() ? o.planLabel : "—",
+    clinicalStatus,
+    clinicalNotes: typeof o.clinicalNotes === "string" ? o.clinicalNotes : "",
+    updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
+  };
+}
 
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -240,6 +279,8 @@ function normalizeRevision(raw: unknown): DraftPlanRevisionSnapshot | null {
     planKind: o.planKind === "patient_plan" ? "patient_plan" : "template",
     linkedPatientId: typeof o.linkedPatientId === "string" ? o.linkedPatientId : null,
     meals: mealsRaw.map((m, i) => normalizeMeal(m, i)),
+    changedByLabel: typeof o.changedByLabel === "string" ? o.changedByLabel : undefined,
+    changedByUserId: typeof o.changedByUserId === "string" ? o.changedByUserId : undefined,
   };
 }
 
@@ -291,8 +332,17 @@ export function normalizePlan(raw: unknown): DraftPlan {
   };
 }
 
+export type SnapshotAuthor = {
+  changedByLabel?: string;
+  changedByUserId?: string | null;
+};
+
 /** Cria entrada de histórico a partir do plano atual (antes de incrementar versão no salvamento). */
-export function snapshotPlanForHistory(plan: DraftPlan, versionNumber: number): DraftPlanRevisionSnapshot {
+export function snapshotPlanForHistory(
+  plan: DraftPlan,
+  versionNumber: number,
+  author?: SnapshotAuthor,
+): DraftPlanRevisionSnapshot {
   const mealsClone = JSON.parse(JSON.stringify(plan.meals)) as DraftPlanMeal[];
   return {
     id: crypto.randomUUID(),
@@ -304,12 +354,15 @@ export function snapshotPlanForHistory(plan: DraftPlan, versionNumber: number): 
     planKind: plan.planKind,
     linkedPatientId: plan.linkedPatientId,
     meals: mealsClone,
+    changedByLabel: author?.changedByLabel,
+    changedByUserId: author?.changedByUserId ?? null,
   };
 }
 
 export function loadDraftPatients(): DraftPatient[] {
   if (typeof window === "undefined") return [];
-  return safeParse<DraftPatient[]>(localStorage.getItem(PATIENTS_KEY), []);
+  const parsed = safeParse<unknown[]>(localStorage.getItem(PATIENTS_KEY), []);
+  return parsed.map((item) => normalizeDraftPatient(item));
 }
 
 export function saveDraftPatients(list: DraftPatient[]) {

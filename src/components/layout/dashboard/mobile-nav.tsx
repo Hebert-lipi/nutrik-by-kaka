@@ -10,6 +10,7 @@ const navItems = [
   { href: "/dashboard", label: "Painel" },
   { href: "/patients", label: "Pacientes" },
   { href: "/diet-plans", label: "Planos" },
+  { href: "/meu-plano", label: "Meu plano" },
 ];
 
 export function MobileNav({ currentPath }: { currentPath: string }) {

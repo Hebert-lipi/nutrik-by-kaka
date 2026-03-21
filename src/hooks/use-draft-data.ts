@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   loadDraftPatients,
   loadDraftPlans,
+  normalizeDraftPatient,
   normalizePlan,
   saveDraftPatients,
   saveDraftPlans,
@@ -27,10 +28,24 @@ export function useDraftPatients() {
   }, [refresh]);
 
   const addPatient = React.useCallback((input: Omit<DraftPatient, "id">) => {
-    const next: DraftPatient[] = [
-      ...loadDraftPatients(),
-      { ...input, id: crypto.randomUUID() },
-    ];
+    const row: DraftPatient = {
+      id: crypto.randomUUID(),
+      name: typeof input.name === "string" ? input.name.trim() : "",
+      email: typeof input.email === "string" ? input.email.trim() : "",
+      planLabel: typeof input.planLabel === "string" && input.planLabel.trim() ? input.planLabel.trim() : "—",
+      clinicalStatus: input.clinicalStatus ?? "active",
+      clinicalNotes: typeof input.clinicalNotes === "string" ? input.clinicalNotes : "",
+      updatedAt: new Date().toISOString(),
+    };
+    const next: DraftPatient[] = [...loadDraftPatients(), row];
+    saveDraftPatients(next);
+    setPatients(next);
+  }, []);
+
+  const updatePatient = React.useCallback((id: string, patch: Partial<Omit<DraftPatient, "id">>) => {
+    const next = loadDraftPatients().map((p) =>
+      p.id === id ? normalizeDraftPatient({ ...p, ...patch, updatedAt: new Date().toISOString() }) : p,
+    );
     saveDraftPatients(next);
     setPatients(next);
   }, []);
@@ -41,7 +56,7 @@ export function useDraftPatients() {
     setPatients(next);
   }, []);
 
-  return { patients, addPatient, removePatient, refresh };
+  return { patients, addPatient, updatePatient, removePatient, refresh };
 }
 
 export function useDraftPlans() {

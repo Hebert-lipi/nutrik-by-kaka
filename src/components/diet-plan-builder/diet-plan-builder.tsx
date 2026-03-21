@@ -22,12 +22,14 @@ import {
 } from "@/lib/diet-plan-factory";
 import { getExampleMeals } from "@/lib/diet-plan-example";
 import { useDraftPatients } from "@/hooks/use-draft-data";
+import { supabase } from "@/lib/supabaseClient";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PlanMetaSection } from "./plan-meta-section";
 import { MealSection } from "./meal-section";
 import { PlanPreviewModal } from "./plan-preview-modal";
+import { PlanBuilderContextStrip } from "./plan-builder-context-strip";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
 
@@ -76,6 +78,22 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [mealDragId, setMealDragId] = React.useState<string | null>(null);
   const [mealOverId, setMealOverId] = React.useState<string | null>(null);
+  const [revisionAuthorLabel, setRevisionAuthorLabel] = React.useState("Profissional (local)");
+  const [revisionAuthorUserId, setRevisionAuthorUserId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      const u = data.user;
+      if (u?.email) setRevisionAuthorLabel(u.email);
+      else if (u?.id) setRevisionAuthorLabel(`Usuário ${u.id.slice(0, 8)}…`);
+      setRevisionAuthorUserId(u?.id ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (mode === "new") {
@@ -133,10 +151,13 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         plan.planKind === "patient_plan" && plan.linkedPatientId ? 1 : Math.max(0, Math.floor(plan.patientCount || 0)),
     });
 
-    const snapshot = snapshotPlanForHistory(trimmed, plan.currentVersionNumber);
+    const snapshot = snapshotPlanForHistory(trimmed, plan.currentVersionNumber, {
+      changedByLabel: revisionAuthorLabel,
+      changedByUserId: revisionAuthorUserId,
+    });
     const toSave = normalizePlan({
       ...trimmed,
-      revisionHistory: [...plan.revisionHistory, snapshot].slice(-15),
+      revisionHistory: [...plan.revisionHistory, snapshot].slice(-120),
       currentVersionNumber: plan.currentVersionNumber + 1,
     });
 
@@ -172,13 +193,16 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     );
   }
 
+  const lastPersistedRevisionAt =
+    plan.revisionHistory.length > 0 ? plan.revisionHistory[plan.revisionHistory.length - 1]!.savedAt : null;
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col gap-4 border-b border-neutral-200/80 pb-8 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex min-h-0 flex-col gap-6 pb-4 md:gap-7">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <PageHeader
           eyebrow="Construtor clínico"
           title={mode === "new" ? "Novo plano alimentar" : "Editar plano alimentar"}
-          description="Estrutura por refeições, horários, grupos e opções — com campos para PDF, histórico de versões e vínculo a paciente (dados locais)."
+          description="Monte a dieta, publique quando estiver pronta. Cada salvamento gera revisão com data/hora e autor — o paciente enxerga só a última versão publicada."
         />
         <div className="flex flex-wrap gap-2">
           <Link href="/diet-plans" className={buttonClassName("outline", "md")}>
@@ -196,16 +220,25 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         </div>
       </div>
 
+      <PlanBuilderContextStrip
+        plan={plan}
+        patients={patients}
+        lastRevisionSavedAt={lastPersistedRevisionAt}
+      />
+
       <PlanPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} plan={plan} patients={patients} />
 
       {saveError ? (
         <p className="rounded-xl border border-orange/35 bg-orange/10 px-4 py-3 text-small12 font-bold text-text-secondary">{saveError}</p>
       ) : null}
-      {lastSaved ? (
-        <p className="text-[11px] font-bold text-secondary">Último salvamento: {lastSaved} · versão atual: {plan.currentVersionNumber}</p>
-      ) : (
-        <p className="text-[11px] font-semibold text-text-muted">Versão atual: {plan.currentVersionNumber}</p>
-      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-text-muted">
+        {lastSaved ? (
+          <span className="font-bold text-secondary">Último salvamento hoje: {lastSaved}</span>
+        ) : (
+          <span>Salve para registrar a primeira revisão.</span>
+        )}
+        <span className="text-text-secondary">Versão em edição: v{plan.currentVersionNumber}</span>
+      </div>
 
       <PlanMetaSection
         name={plan.name}
@@ -253,6 +286,9 @@ export function DietPlanBuilder({ mode, planId }: Props) {
                   </span>
                   <span className="w-full text-[11px] text-text-secondary sm:w-auto">
                     {rev.name} · {rev.meals.length} refeição(ões)
+                    {rev.changedByLabel ? (
+                      <span className="mt-0.5 block font-semibold text-text-muted">Por {rev.changedByLabel}</span>
+                    ) : null}
                   </span>
                 </li>
               ))}
@@ -261,7 +297,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         </Card>
       ) : null}
 
-      <section className="space-y-4">
+      <section className="space-y-4 pb-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-h4Extra text-text-primary">Refeições e grupos</h2>
@@ -280,7 +316,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
           </Button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           {plan.meals.map((meal, index) => (
             <div
               key={meal.id}
@@ -345,20 +381,31 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         </div>
       </section>
 
-      <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-2xl border border-neutral-200/80 bg-bg-0/95 p-4 shadow-premium backdrop-blur-md sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <p className="text-small12 font-semibold text-text-muted">
-          Salvar cria nova entrada no histórico e incrementa a versão (até 15 revisões armazenadas).
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Button type="button" variant="outline" size="md" onClick={() => persist("draft")}>
-            Salvar como rascunho
-          </Button>
-          <Button type="button" variant="secondary" size="md" onClick={() => persist()}>
-            Salvar plano
-          </Button>
-          <Button type="button" variant="primary" size="md" onClick={() => persist("published")}>
-            Publicar plano
-          </Button>
+      <Card className="border-neutral-200/55 bg-gradient-to-br from-neutral-50/30 to-bg-0 shadow-none">
+        <CardContent className="flex flex-col gap-2 py-5 text-center sm:text-left">
+          <p className="text-title16 font-extrabold text-text-primary">Pronto para liberar ao paciente?</p>
+          <p className="text-small12 leading-relaxed text-text-secondary">
+            Use <span className="font-bold text-text-primary">Publicar</span> quando a dieta estiver finalizada. Rascunhos ficam só na sua área; o portal do paciente mostra apenas a última versão publicada vinculada a ele.
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="sticky bottom-0 z-20 -mx-4 mt-2 border-t border-neutral-200/70 bg-bg-0/96 px-4 py-3 shadow-[0_-12px_40px_-20px_rgba(15,23,42,0.18)] backdrop-blur-lg md:-mx-6 md:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <p className="max-w-xl text-small12 font-semibold text-text-muted">
+            Salvar registra revisão com data/hora e autor (até 120 revisões neste dispositivo). Publicar não apaga versões anteriores.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            <Button type="button" variant="outline" size="md" onClick={() => persist("draft")}>
+              Salvar como rascunho
+            </Button>
+            <Button type="button" variant="secondary" size="md" onClick={() => persist()}>
+              Salvar plano
+            </Button>
+            <Button type="button" variant="primary" size="md" onClick={() => persist("published")}>
+              Publicar plano
+            </Button>
+          </div>
         </div>
       </div>
     </div>

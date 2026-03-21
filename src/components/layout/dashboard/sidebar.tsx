@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -13,25 +15,27 @@ export type SidebarItem = {
 export function Sidebar({ currentPath }: { currentPath: string }) {
   const items: SidebarItem[] = useMemo(
     () => [
-      { href: "/dashboard", label: "Painel", icon: <IconDashboard className="h-5 w-5" /> },
-      { href: "/patients", label: "Pacientes", icon: <IconUsers className="h-5 w-5" /> },
-      { href: "/diet-plans", label: "Planos", icon: <IconDietPlan className="h-5 w-5" /> },
+      { href: "/dashboard", label: "Painel", icon: <IconDashboard className="h-5 w-5 shrink-0" /> },
+      { href: "/patients", label: "Pacientes", icon: <IconUsers className="h-5 w-5 shrink-0" /> },
+      { href: "/diet-plans", label: "Planos", icon: <IconDietPlan className="h-5 w-5 shrink-0" /> },
     ],
     [],
   );
 
   return (
-    <aside className="nutrik-print-hide hidden w-[272px] shrink-0 md:block">
-      <div className="flex h-full min-h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-neutral-200/50 bg-bg-0/95 p-4 shadow-card ring-1 ring-black/[0.02] backdrop-blur-sm md:min-h-[calc(100dvh-3rem)]">
-        <div className="flex items-center gap-3 border-b border-neutral-100/90 pb-5">
-          <BrandLogo size={44} />
-          <div className="min-w-0">
-            <p className="truncate font-extrabold tracking-tight text-text-primary">Nutrik</p>
-            <p className="truncate text-small12 font-medium text-text-muted">by Kaká</p>
+    <aside className="nutrik-print-hide hidden h-full min-h-0 w-[272px] shrink-0 md:flex md:flex-col">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200/50 bg-bg-0/95 shadow-card ring-1 ring-black/[0.02] backdrop-blur-sm">
+        <div className="shrink-0 border-b border-neutral-100/90 p-4 pb-4">
+          <div className="flex items-center gap-3">
+            <BrandLogo size={44} />
+            <div className="min-w-0">
+              <p className="truncate font-extrabold tracking-tight text-text-primary">Nutrik</p>
+              <p className="truncate text-small12 font-medium text-text-muted">by Kaká</p>
+            </div>
           </div>
         </div>
 
-        <nav className="mt-6 flex flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-3 pt-4" aria-label="Navegação principal">
           {items.map((item) => {
             const active = currentPath === item.href || currentPath.startsWith(item.href + "/");
             return (
@@ -52,9 +56,9 @@ export function Sidebar({ currentPath }: { currentPath: string }) {
           })}
         </nav>
 
-        <div className="mt-auto pt-8">
+        <div className="shrink-0 border-t border-neutral-100/80 p-4 pt-3">
           <p className="px-1 text-[11px] font-medium leading-relaxed text-text-muted/90">
-            Interface clínica · dados exibidos conforme seus cadastros
+            Área clínica · sessão segura
           </p>
         </div>
       </div>

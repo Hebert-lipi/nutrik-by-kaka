@@ -9,6 +9,7 @@ import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
 import { useDraftPatients } from "@/hooks/use-draft-data";
 import { IconUsers } from "@/components/layout/dashboard/icons";
 
@@ -123,9 +124,14 @@ export default function PatientsPage() {
                               .toUpperCase()}
                           </span>
                           <div className="min-w-0">
-                            <span className="block font-semibold text-text-primary">{p.name}</span>
+                            <Link
+                              href={`/patients/${p.id}`}
+                              className="block font-semibold text-text-primary underline-offset-4 hover:text-primary hover:underline"
+                            >
+                              {p.name}
+                            </Link>
                             <Chip tone="muted" className="mt-1.5 max-w-[12rem]">
-                              Diretório
+                              Ver ficha
                             </Chip>
                           </div>
                         </div>
