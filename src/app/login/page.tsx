@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
 
 type Step = "email" | "code";
+const OTP_CODE_LENGTH = 8;
+
+/** Intervalo mínimo entre envios de código (evita 429 por cliques repetidos). */
+const COOLDOWN_AFTER_SEND_SEC = 60;
+/** Após 429 do Supabase, bloqueio local extra antes de nova tentativa de envio. */
+const COOLDOWN_AFTER_429_SEC = 180;
 
 function isRateLimitedError(error: { status?: number; message?: string } | null): boolean {
   if (!error) return false;
@@ -18,7 +24,13 @@ function isRateLimitedError(error: { status?: number; message?: string } | null)
 }
 
 function rateLimitMessage(): string {
-  return "Limite de tentativas atingido (proteção do serviço). Aguarde alguns minutos antes de pedir outro código ou tente outra conexão de internet.";
+  return "Muitas solicitações em pouco tempo. Por segurança, o envio de códigos foi pausado temporariamente. Aguarde alguns minutos e tente novamente.";
+}
+
+function formatCooldown(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function LoginPage() {
@@ -30,16 +42,28 @@ export default function LoginPage() {
   const [verifying, setVerifying] = React.useState(false);
   const [resending, setResending] = React.useState(false);
   const [status, setStatus] = React.useState<null | { ok: boolean; message: string }>(null);
+  /** Segundos restantes antes de permitir novo envio / reenvio (0 = liberado). */
+  const [sendCooldownSec, setSendCooldownSec] = React.useState(0);
 
   const sendLockRef = React.useRef(false);
   const verifyLockRef = React.useRef(false);
 
   const trimmedEmail = email.trim();
 
+  const cooldownActive = sendCooldownSec > 0;
+  React.useEffect(() => {
+    if (!cooldownActive) return;
+    const id = window.setInterval(() => {
+      setSendCooldownSec((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [cooldownActive]);
+
   function goToEmailStep() {
     setStep("email");
     setCode("");
     setStatus(null);
+    setSendCooldownSec(0);
   }
 
   function handleEmailChange(value: string) {
@@ -48,11 +72,11 @@ export default function LoginPage() {
       setStep("email");
       setCode("");
       setStatus(null);
+      setSendCooldownSec(0);
     }
   }
 
-  async function sendOtpToEmail(targetEmail: string): Promise<boolean> {
-    // Sem emailRedirectTo → Supabase envia código OTP por e-mail (não magic link).
+  async function sendOtpToEmail(targetEmail: string): Promise<{ success: boolean; rateLimited?: boolean }> {
     const { error } = await supabase.auth.signInWithOtp({
       email: targetEmail,
       options: {
@@ -61,26 +85,22 @@ export default function LoginPage() {
     });
 
     if (error) {
-      const limited = isRateLimitedError(error);
-      setStatus({
-        ok: false,
-        message: limited
-          ? rateLimitMessage()
-          : "Não foi possível enviar o código. Tente novamente.",
-      });
-      return false;
+      return { success: false, rateLimited: isRateLimitedError(error) };
     }
+    return { success: true };
+  }
 
-    setStatus({
-      ok: true,
-      message: "Enviamos um código de 6 dígitos para o seu e-mail. Verifique também a caixa de spam.",
-    });
-    return true;
+  function applyCooldownAfterSend() {
+    setSendCooldownSec((prev) => Math.max(prev, COOLDOWN_AFTER_SEND_SEC));
+  }
+
+  function applyCooldownAfter429() {
+    setSendCooldownSec((prev) => Math.max(prev, COOLDOWN_AFTER_429_SEC));
   }
 
   async function onSendCode(e: React.FormEvent) {
     e.preventDefault();
-    if (sendLockRef.current || sending || verifying) return;
+    if (sendLockRef.current || sending || verifying || sendCooldownSec > 0) return;
 
     setStatus(null);
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
@@ -91,8 +111,24 @@ export default function LoginPage() {
     sendLockRef.current = true;
     setSending(true);
     try {
-      const ok = await sendOtpToEmail(trimmedEmail);
-      if (ok) setStep("code");
+      const result = await sendOtpToEmail(trimmedEmail);
+      if (!result.success) {
+        setStatus({
+          ok: false,
+          message: result.rateLimited
+            ? rateLimitMessage()
+            : "Não foi possível enviar o código. Tente novamente.",
+        });
+        if (result.rateLimited) applyCooldownAfter429();
+        return;
+      }
+
+      applyCooldownAfterSend();
+      setStatus({
+        ok: true,
+        message: "Enviamos um código para o seu e-mail. Verifique também a caixa de spam.",
+      });
+      setStep("code");
     } catch {
       setStatus({
         ok: false,
@@ -106,14 +142,14 @@ export default function LoginPage() {
 
   async function onVerifyCode(e: React.FormEvent) {
     e.preventDefault();
-    if (verifyLockRef.current || verifying || sending) return;
+    if (verifyLockRef.current || verifying || sending || resending) return;
 
     setStatus(null);
     const token = code.replace(/\D/g, "");
-    if (token.length < 6) {
+    if (token.length !== OTP_CODE_LENGTH) {
       setStatus({
         ok: false,
-        message: "Digite o código de 6 dígitos que você recebeu por e-mail.",
+        message: `Digite o código com ${OTP_CODE_LENGTH} dígitos que você recebeu por e-mail.`,
       });
       return;
     }
@@ -143,6 +179,7 @@ export default function LoginPage() {
               ? "Código inválido ou expirado. Peça um novo código ou confira os dígitos."
               : "Não foi possível entrar. Tente novamente.",
         });
+        if (limited) applyCooldownAfter429();
         return;
       }
 
@@ -160,12 +197,29 @@ export default function LoginPage() {
   }
 
   async function onResendCode() {
-    if (sendLockRef.current || resending || sending || verifying) return;
+    if (sendLockRef.current || resending || sending || verifying || sendCooldownSec > 0) return;
+
     setStatus(null);
     sendLockRef.current = true;
     setResending(true);
     try {
-      await sendOtpToEmail(trimmedEmail);
+      const result = await sendOtpToEmail(trimmedEmail);
+      if (!result.success) {
+        setStatus({
+          ok: false,
+          message: result.rateLimited
+            ? rateLimitMessage()
+            : "Não foi possível reenviar o código. Tente novamente.",
+        });
+        if (result.rateLimited) applyCooldownAfter429();
+        return;
+      }
+
+      applyCooldownAfterSend();
+      setStatus({
+        ok: true,
+        message: "Enviamos um novo código para o seu e-mail.",
+      });
     } catch {
       setStatus({
         ok: false,
@@ -178,6 +232,7 @@ export default function LoginPage() {
   }
 
   const busy = sending || verifying || resending;
+  const sendBlockedByCooldown = sendCooldownSec > 0;
 
   return (
     <div className="min-h-dvh bg-bg-1 px-4 py-10">
@@ -211,15 +266,21 @@ export default function LoginPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="submit"
-                  disabled={sending}
+                  disabled={sending || sendBlockedByCooldown}
                   aria-busy={sending}
                   className="w-full sm:w-auto rounded-lg px-6"
                 >
-                  {sending ? "Enviando..." : "Enviar código"}
+                  {sending ? "Enviando..." : sendBlockedByCooldown ? `Aguarde ${formatCooldown(sendCooldownSec)}` : "Enviar código"}
                 </Button>
 
                 <p className="text-small12 text-neutral-500">
-                  Você receberá um código de 6 dígitos no e-mail.
+                  {sendBlockedByCooldown ? (
+                    <>
+                      Próximo envio disponível em <span className="font-semibold tabular-nums">{formatCooldown(sendCooldownSec)}</span>.
+                    </>
+                  ) : (
+                    <>Você receberá um código de 6 dígitos no e-mail.</>
+                  )}
                 </p>
               </div>
 
@@ -257,18 +318,24 @@ export default function LoginPage() {
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="000000"
+                placeholder="00000000"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                maxLength={6}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, OTP_CODE_LENGTH))}
+                maxLength={OTP_CODE_LENGTH}
                 disabled={verifying}
                 autoFocus
               />
 
+              {sendBlockedByCooldown ? (
+                <p className="text-small12 text-neutral-500">
+                  Reenvio disponível em <span className="font-semibold tabular-nums">{formatCooldown(sendCooldownSec)}</span>.
+                </p>
+              ) : null}
+
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="submit"
-                  disabled={verifying || code.replace(/\D/g, "").length < 6}
+                  disabled={verifying || code.replace(/\D/g, "").length !== OTP_CODE_LENGTH}
                   aria-busy={verifying}
                   className="w-full sm:w-auto rounded-lg px-6"
                 >
@@ -278,7 +345,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={onResendCode}
-                  disabled={busy}
+                  disabled={busy || sendBlockedByCooldown}
                   className="text-left text-small12 font-semibold text-primary underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50 sm:text-right"
                 >
                   {resending ? "Reenviando..." : "Não recebeu? Reenviar código"}
