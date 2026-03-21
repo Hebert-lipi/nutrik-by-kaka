@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useDraftPatients, useDraftPlans } from "@/hooks/use-draft-data";
+import { useSupabasePatients } from "@/hooks/use-supabase-patients";
+import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { patientDietSummary } from "@/lib/clinical/dashboard-snapshot";
 import type { PatientClinicalStatus } from "@/lib/draft-storage";
 import { getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
@@ -32,8 +33,8 @@ export default function PatientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
-  const { patients, updatePatient } = useDraftPatients();
-  const { plans } = useDraftPlans();
+  const { patients, updatePatient, loading: patientsLoading } = useSupabasePatients();
+  const { plans, loading: plansLoading } = useSupabaseDietPlans();
 
   const patient = patients.find((p) => p.id === patientId);
   const summary = patient ? patientDietSummary(patient, plans) : null;
@@ -51,11 +52,17 @@ export default function PatientDetailPage() {
     );
   }
 
+  if (patientsLoading || plansLoading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando ficha…</div>
+    );
+  }
+
   if (!patient) {
     return (
       <EmptyState
         title="Paciente não encontrado"
-        description="Este registro não existe no diretório deste dispositivo."
+        description="Este registro não existe no Supabase ou não pertence à sua conta."
         action={{ label: "Ir para pacientes", onClick: () => router.push("/patients") }}
       />
     );
@@ -95,7 +102,7 @@ export default function PatientDetailPage() {
                   className="rounded-xl border border-neutral-200/80 bg-bg-0 px-3 py-2 text-small12 font-bold text-text-primary"
                   value={status}
                   onChange={(e) =>
-                    updatePatient(patient.id, { clinicalStatus: e.target.value as PatientClinicalStatus })
+                    void updatePatient(patient.id, { clinicalStatus: e.target.value as PatientClinicalStatus })
                   }
                 >
                   <option value="active">Ativo</option>
@@ -199,7 +206,15 @@ export default function PatientDetailPage() {
               variant="primary"
               size="md"
               className="w-full"
-              onClick={() => updatePatient(patient.id, { clinicalNotes: notes })}
+              onClick={() =>
+                void (async () => {
+                  try {
+                    await updatePatient(patient.id, { clinicalNotes: notes });
+                  } catch {
+                    /* noop */
+                  }
+                })()
+              }
             >
               Salvar observações
             </Button>

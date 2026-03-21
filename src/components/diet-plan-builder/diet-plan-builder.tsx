@@ -4,13 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { DraftPlan } from "@/lib/draft-storage";
-import {
-  createEmptyMeal,
-  getDraftPlanById,
-  normalizePlan,
-  snapshotPlanForHistory,
-  upsertDraftPlan,
-} from "@/lib/draft-storage";
+import { createEmptyMeal, normalizePlan, snapshotPlanForHistory } from "@/lib/draft-storage";
 import {
   addGroupToMeal,
   cloneEntirePlan,
@@ -21,7 +15,8 @@ import {
   reorderMeals,
 } from "@/lib/diet-plan-factory";
 import { getExampleMeals } from "@/lib/diet-plan-example";
-import { useDraftPatients } from "@/hooks/use-draft-data";
+import { useSupabasePatients } from "@/hooks/use-supabase-patients";
+import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { supabase } from "@/lib/supabaseClient";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -69,7 +64,8 @@ type Props = { mode: "new" | "edit"; planId?: string };
 
 export function DietPlanBuilder({ mode, planId }: Props) {
   const router = useRouter();
-  const { patients } = useDraftPatients();
+  const { patients } = useSupabasePatients();
+  const { fetchPlanById, savePlanFromBuilder, upsertPlan } = useSupabaseDietPlans();
   const [plan, setPlan] = React.useState<DraftPlan | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [notFound, setNotFound] = React.useState(false);
@@ -103,17 +99,25 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       return;
     }
     if (mode === "edit" && planId) {
-      const found = getDraftPlanById(planId);
-      if (!found) {
-        setNotFound(true);
-        setPlan(null);
-      } else {
-        setNotFound(false);
-        setPlan(found);
-      }
-      setLoaded(true);
+      let cancelled = false;
+      setLoaded(false);
+      void (async () => {
+        const found = await fetchPlanById(planId);
+        if (cancelled) return;
+        if (!found) {
+          setNotFound(true);
+          setPlan(null);
+        } else {
+          setNotFound(false);
+          setPlan(found);
+        }
+        setLoaded(true);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [mode, planId]);
+  }, [mode, planId, fetchPlanById]);
 
   const updatePlan = React.useCallback((updater: (p: DraftPlan) => DraftPlan) => {
     setPlan((p) => {
@@ -132,7 +136,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     }));
   };
 
-  const persist = (statusOverride?: DraftPlan["status"]) => {
+  const persist = async (statusOverride?: DraftPlan["status"]) => {
     if (!plan) return;
     const name = plan.name.trim();
     if (!name) {
@@ -161,19 +165,27 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       currentVersionNumber: plan.currentVersionNumber + 1,
     });
 
-    upsertDraftPlan(toSave);
-    setPlan(toSave);
-    setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-    if (mode === "new") {
-      router.replace(`/diet-plans/${toSave.id}/edit`);
+    try {
+      await savePlanFromBuilder(toSave);
+      setPlan(toSave);
+      setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      if (mode === "new") {
+        router.replace(`/diet-plans/${toSave.id}/edit`);
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Erro ao salvar no Supabase.");
     }
   };
 
-  const duplicateEntirePlanToNew = () => {
+  const duplicateEntirePlanToNew = async () => {
     if (!plan) return;
     const copy = cloneEntirePlan(plan);
-    upsertDraftPlan(copy);
-    router.push(`/diet-plans/${copy.id}/edit`);
+    try {
+      await upsertPlan(copy);
+      router.push(`/diet-plans/${copy.id}/edit`);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Erro ao duplicar plano.");
+    }
   };
 
   if (!loaded || !plan) {
@@ -214,7 +226,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
           <Button type="button" variant="secondary" size="md" onClick={applyExample}>
             Carregar exemplo
           </Button>
-          <Button type="button" variant="secondary" size="md" onClick={duplicateEntirePlanToNew}>
+          <Button type="button" variant="secondary" size="md" onClick={() => void duplicateEntirePlanToNew()}>
             Duplicar plano
           </Button>
         </div>
@@ -396,13 +408,13 @@ export function DietPlanBuilder({ mode, planId }: Props) {
             Salvar registra revisão com data/hora e autor (até 120 revisões neste dispositivo). Publicar não apaga versões anteriores.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <Button type="button" variant="outline" size="md" onClick={() => persist("draft")}>
+            <Button type="button" variant="outline" size="md" onClick={() => void persist("draft")}>
               Salvar como rascunho
             </Button>
-            <Button type="button" variant="secondary" size="md" onClick={() => persist()}>
+            <Button type="button" variant="secondary" size="md" onClick={() => void persist()}>
               Salvar plano
             </Button>
-            <Button type="button" variant="primary" size="md" onClick={() => persist("published")}>
+            <Button type="button" variant="primary" size="md" onClick={() => void persist("published")}>
               Publicar plano
             </Button>
           </div>

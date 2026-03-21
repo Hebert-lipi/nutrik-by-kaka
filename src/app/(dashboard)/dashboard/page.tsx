@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
@@ -11,7 +12,6 @@ import { useDashboardSnapshot } from "@/hooks/use-dashboard-snapshot";
 import { IconStatCheck, IconStatLayers, IconStatPeople, IconChevronRight } from "@/components/ui/icons-stat";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { Chip } from "@/components/ui/chip";
-import { buttonClassName } from "@/components/ui/button";
 import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
 
 function initials(name: string) {
@@ -30,12 +30,39 @@ export default function DashboardPage() {
   const snap = useDashboardSnapshot();
   const { patients, plans, publishedPlans } = snap.counts;
 
+  if (snap.loading) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-body14 font-semibold text-text-muted">
+        Carregando painel…
+      </div>
+    );
+  }
+
+  if (snap.error) {
+    return (
+      <div className="space-y-4">
+        <PageHeader eyebrow="Resumo clínico" title="Visão geral" description="Dados em tempo real no Supabase." />
+        <Card className="border-orange/25 bg-orange/[0.06]">
+          <CardContent className="space-y-3 py-8">
+            <p className="text-body14 font-semibold text-text-secondary">{snap.error}</p>
+            <p className="text-small12 text-text-muted">
+              Aplique o SQL em <span className="font-mono">supabase/migrations/</span> conforme docs/SUPABASE_SETUP.md
+            </p>
+            <Button type="button" variant="primary" size="md" onClick={() => router.refresh()}>
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-10 md:space-y-12">
       <PageHeader
         eyebrow="Resumo clínico"
         title="Visão geral"
-        description="Painel preparado para integração com servidor: totais refletem seu diretório atual; gráficos e métricas operacionais aguardam dados históricos e telemetria."
+        description="Totais e listas vêm do Supabase (sua conta). Gráficos e métricas operacionais podem ser ligados depois."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -123,7 +150,7 @@ export default function DashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div>
               <p className="text-title16 font-extrabold text-text-primary">Atividade recente</p>
-              <p className="mt-0.5 text-small12 font-semibold text-text-muted">Eventos do diretório local</p>
+              <p className="mt-0.5 text-small12 font-semibold text-text-muted">Eventos do seu workspace</p>
             </div>
             <Chip tone="primary">Ao vivo</Chip>
           </CardHeader>

@@ -3,11 +3,10 @@ import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
 import { getLastPlanRevisionAt, getPublishedPlanForPatient } from "@/lib/clinical/patient-plan";
 
 /**
- * Visão única do painel — hoje alimentada por rascunhos locais;
- * futura implementação: substituir por resposta de API/Supabase mantendo este contrato.
+ * Visão única do painel — alimentada por Supabase (MVP).
  */
 export type DashboardSnapshot = {
-  source: "local_drafts" | "api";
+  source: "supabase" | "local_drafts" | "api";
   counts: {
     patients: number;
     plans: number;
@@ -65,7 +64,7 @@ export function buildDashboardSnapshot(patients: DraftPatient[], plans: DraftPla
   const activePatients = patients.filter((p) => (p.clinicalStatus ?? "active") === "active").length;
 
   return {
-    source: "local_drafts",
+    source: "supabase",
     counts: {
       patients: patients.length,
       plans: plans.length,

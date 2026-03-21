@@ -1,12 +1,12 @@
 # Fluxo Nutricionista → Paciente (Nutrik by Kaká)
 
-## Fluxo de dados (frontend atual)
+## Fluxo de dados (MVP Supabase)
 
-1. **Criar paciente** → `DraftPatient` com **ID único** (`crypto.randomUUID()`), armazenado em `localStorage` (demo).
-2. **Criar/editar dieta** → `DraftPlan` com `planKind: template | patient_plan` e `linkedPatientId` quando for plano de paciente.
-3. **Rascunho vs publicado** → `status: draft | published`. O paciente consome apenas planos **`published`** vinculados a ele (`getPublishedPlanForPatient`).
-4. **Versionamento** → Cada salvamento no construtor acrescenta um snapshot em `revisionHistory` (com `savedAt`, `versionNumber`, refeições daquele momento, **`changedByLabel`** / **`changedByUserId`** quando há sessão Supabase). Mantém até **120** revisões por plano neste dispositivo (no servidor, ilimitado + arquivo).
-5. **Paciente** → `/meu-plano`: e-mail da sessão Supabase casado com `DraftPatient.email` **no mesmo navegador** (demo). **Sem** sidebar da nutricionista.
+1. **Criar paciente** → linha em `public.patients` (`nutritionist_user_id` = `auth.uid()`), ID UUID gerado pelo banco.
+2. **Criar/editar dieta** → linha em `public.diet_plans`; refeições e histórico em `structure_json` (JSONB). Vínculo: `patient_id` quando for plano de paciente.
+3. **Rascunho vs publicado** → colunas `status` e `published_at`. Paciente (RLS) lê só `published` do seu `patient_id`.
+4. **Versionamento** → snapshots em `structure_json.revisionHistory` (até 120 entradas no app); sem tabela de revisões ainda.
+5. **Paciente** → `/meu-plano`: RPC `claim_patient_by_email()` associa `patients.auth_user_id`; depois a query do plano publicado passa na RLS.
 
 ## Liberação da dieta (visão alvo)
 
@@ -17,11 +17,9 @@
 | Leitura | Paciente | Somente **última versão publicada** (modelo atual: um plano publicado por paciente) |
 | Isolamento | Backend | RLS: paciente lê só seu plano; nutricionista escopo por `professional_id` |
 
-## Portal do paciente — adesão (local, espelho da API)
+## Portal do paciente — adesão (ainda local)
 
-- Arquivo `src/lib/patient-adherence-storage.ts`: por `patientId` + `planId` + **data (YYYY-MM-DD)**.
-- Campos: refeição **realizada**, **dificuldade**, **observação diária**.
-- Evento `nutrik-patient-adherence` para reatividade entre abas (mesmo origem).
+- `src/lib/patient-adherence-storage.ts` continua em **localStorage** (próximo passo: tabela `patient_meal_logs` no Supabase).
 
 ## Histórico e segurança
 
@@ -29,9 +27,8 @@
 - **Quem alterou**: preenchido com e-mail do usuário Supabase quando disponível; fallback `"Profissional (local)"`.
 - **Tempo real**: hoje via eventos locais; futuro Supabase Realtime em `plan_revisions` / `patient_logs`.
 
-## O que falta para backend real
+## O que falta depois do MVP
 
-- Tabelas: `patients`, `diet_plans`, `plan_revisions` (ou JSONB versionado), `patient_adherence_logs`, `profiles` com role.
-- Políticas RLS e API que não exponham planos de outros pacientes.
-- **Redirect pós-login** por role (`/dashboard` vs `/meu-plano`).
-- Substituir `localStorage` por fetch + cache; sincronizar adesão e “última revisão vista” no servidor.
+- Tabela `plan_revisions` (ou stream de eventos) em vez de só JSON em `structure_json`.
+- Adesão do paciente persistida no Supabase + visão na ficha da nutricionista.
+- Metadados de perfil (`nutrik_role`) ou convites explícitos se houver ambiguidade de e-mail.

@@ -10,7 +10,7 @@ import { Chip } from "@/components/ui/chip";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { useDraftPatients } from "@/hooks/use-draft-data";
+import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { IconUsers } from "@/components/layout/dashboard/icons";
 
 function emailDomain(email: string) {
@@ -20,22 +20,21 @@ function emailDomain(email: string) {
 }
 
 export default function PatientsPage() {
-  const { patients, addPatient, removePatient } = useDraftPatients();
+  const { patients, addPatient, removePatient, loading, error } = useSupabasePatients();
   const [addOpen, setAddOpen] = React.useState(false);
   const [removeId, setRemoveId] = React.useState<string | null>(null);
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
-  const [planLabel, setPlanLabel] = React.useState("");
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
 
   function resetForm() {
     setName("");
     setEmail("");
-    setPlanLabel("");
     setFormError(null);
   }
 
-  function submitAdd(e: React.FormEvent) {
+  async function submitAdd(e: React.FormEvent) {
     e.preventDefault();
     const n = name.trim();
     const em = email.trim();
@@ -43,13 +42,26 @@ export default function PatientsPage() {
       setFormError("Informe nome completo e um e-mail válido.");
       return;
     }
-    addPatient({ name: n, email: em, planLabel: planLabel.trim() || "—" });
-    resetForm();
-    setAddOpen(false);
+    setSaving(true);
+    setFormError(null);
+    try {
+      await addPatient({ name: n, email: em });
+      resetForm();
+      setAddOpen(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function confirmRemove() {
-    if (removeId) removePatient(removeId);
+  async function confirmRemove() {
+    if (!removeId) return;
+    try {
+      await removePatient(removeId);
+    } catch {
+      /* modal fecha mesmo assim; lista atualiza no próximo refresh */
+    }
     setRemoveId(null);
   }
 
@@ -58,8 +70,14 @@ export default function PatientsPage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Pacientes"
-        description="Diretório com nome, contato e vínculo a planos. Alterações ficam registradas neste navegador até haver integração com o servidor."
+        description="Diretório salvo no Supabase — vinculado à sua conta. Use o mesmo e-mail do paciente no login para ele acessar /meu-plano."
       />
+
+      {error ? (
+        <p className="rounded-xl border border-orange/30 bg-orange/10 px-4 py-3 text-small12 font-semibold text-text-secondary">
+          {error} — confira se aplicou a migration SQL no projeto Supabase (veja docs/SUPABASE_SETUP.md).
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-6 pt-6">
@@ -100,7 +118,13 @@ export default function PatientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {patients.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <TableCell colSpan={4} className="border-0 p-8 text-center text-body14 font-semibold text-text-muted">
+                      Carregando pacientes…
+                    </TableCell>
+                  </tr>
+                ) : patients.length === 0 ? (
                   <tr>
                     <TableCell colSpan={4} className="border-0 p-5 md:p-8">
                       <EmptyState
@@ -182,8 +206,8 @@ export default function PatientsPage() {
             >
               Cancelar
             </Button>
-            <Button type="submit" form="add-patient-form" variant="primary" className="rounded-xl">
-              Salvar paciente
+            <Button type="submit" form="add-patient-form" variant="primary" className="rounded-xl" disabled={saving}>
+              {saving ? "Salvando…" : "Salvar paciente"}
             </Button>
           </div>
         }
@@ -204,12 +228,6 @@ export default function PatientsPage() {
             autoComplete="email"
             required
           />
-          <Input
-            label="Plano vinculado (opcional)"
-            placeholder="Ex.: Plano hipocalórico — março"
-            value={planLabel}
-            onChange={(e) => setPlanLabel(e.target.value)}
-          />
         </form>
       </Modal>
 
@@ -217,7 +235,7 @@ export default function PatientsPage() {
         open={removeId !== null}
         onClose={() => setRemoveId(null)}
         title="Remover paciente"
-        description="Esta ação remove o registro da lista neste dispositivo. Você pode cadastrar novamente a qualquer momento."
+        description="Esta ação remove o paciente e os planos vinculados a ele no Supabase (cascade)."
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRemoveId(null)}>

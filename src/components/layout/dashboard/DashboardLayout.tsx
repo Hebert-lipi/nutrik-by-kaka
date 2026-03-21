@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { NutritionistBootstrap } from "./nutritionist-bootstrap";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -49,7 +50,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               isPlanBuilderRoute ? "pb-6 md:pb-8" : "pb-10 md:pb-12",
             )}
           >
-            {children}
+            <NutritionistBootstrap>{children}</NutritionistBootstrap>
           </div>
         </main>
       </div>

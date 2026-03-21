@@ -11,7 +11,8 @@ import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
-import { useDraftPatients, useDraftPlans } from "@/hooks/use-draft-data";
+import { useSupabasePatients } from "@/hooks/use-supabase-patients";
+import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { IconDietPlan } from "@/components/layout/dashboard/icons";
 import { buttonClassName } from "@/components/ui/button";
 import { cloneEntirePlan } from "@/lib/diet-plan-factory";
@@ -19,18 +20,24 @@ import type { DraftPlan } from "@/lib/draft-storage";
 
 export default function DietPlansPage() {
   const router = useRouter();
-  const { patients } = useDraftPatients();
-  const { plans, removePlan, togglePublish, upsertPlan } = useDraftPlans();
+  const { patients } = useSupabasePatients();
+  const { plans, removePlan, togglePublish, upsertPlan, loading, error } = useSupabaseDietPlans();
+  const [listError, setListError] = React.useState<string | null>(null);
 
   function patientLabel(id: string | null) {
     if (!id) return null;
     return patients.find((p) => p.id === id)?.name ?? null;
   }
 
-  function duplicatePlan(pl: DraftPlan) {
+  async function duplicatePlan(pl: DraftPlan) {
     const copy = cloneEntirePlan(pl);
-    upsertPlan(copy);
-    router.push(`/diet-plans/${copy.id}/edit`);
+    setListError(null);
+    try {
+      await upsertPlan(copy);
+      router.push(`/diet-plans/${copy.id}/edit`);
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : "Erro ao duplicar.");
+    }
   }
   const [removeId, setRemoveId] = React.useState<string | null>(null);
 
@@ -39,8 +46,14 @@ export default function DietPlansPage() {
       <PageHeader
         eyebrow="Biblioteca"
         title="Planos alimentares"
-        description="Modelos completos com refeições e alimentos. Use o construtor para criar ou editar — sem modal simples."
+        description="Planos salvos no Supabase. Publique para liberar ao paciente vinculado em /meu-plano."
       />
+
+      {error || listError ? (
+        <p className="rounded-xl border border-orange/30 bg-orange/10 px-4 py-3 text-small12 font-semibold text-text-secondary">
+          {error ?? listError}
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-6 pt-6">
@@ -75,7 +88,13 @@ export default function DietPlansPage() {
                 </tr>
               </thead>
               <tbody>
-                {plans.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <TableCell colSpan={6} className="border-0 p-8 text-center text-body14 font-semibold text-text-muted">
+                      Carregando planos…
+                    </TableCell>
+                  </tr>
+                ) : plans.length === 0 ? (
                   <tr>
                     <TableCell colSpan={6} className="border-0 p-5 md:p-8">
                       <EmptyState
@@ -133,10 +152,23 @@ export default function DietPlansPage() {
                           <Link href={`/diet-plans/${pl.id}/edit`} className={buttonClassName("outline", "sm", "rounded-full")}>
                             Editar
                           </Link>
-                          <Button type="button" variant="outline" size="sm" onClick={() => duplicatePlan(pl)}>
+                          <Button type="button" variant="outline" size="sm" onClick={() => void duplicatePlan(pl)}>
                             Duplicar
                           </Button>
-                          <Button type="button" variant="secondary" size="sm" onClick={() => togglePublish(pl.id)}>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  await togglePublish(pl.id);
+                                } catch (e) {
+                                  setListError(e instanceof Error ? e.message : "Erro ao publicar.");
+                                }
+                              })();
+                            }}
+                          >
                             {pl.status === "published" ? "Despublicar" : "Publicar"}
                           </Button>
                           <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={() => setRemoveId(pl.id)}>
@@ -157,7 +189,7 @@ export default function DietPlansPage() {
         open={removeId !== null}
         onClose={() => setRemoveId(null)}
         title="Excluir plano"
-        description="O plano será removido da lista neste dispositivo. Você pode recriar quando precisar."
+        description="O plano será excluído permanentemente no Supabase."
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRemoveId(null)}>
@@ -168,8 +200,16 @@ export default function DietPlansPage() {
               variant="danger"
               className="rounded-xl"
               onClick={() => {
-                if (removeId) removePlan(removeId);
-                setRemoveId(null);
+                void (async () => {
+                  if (removeId) {
+                    try {
+                      await removePlan(removeId);
+                    } catch (e) {
+                      setListError(e instanceof Error ? e.message : "Erro ao excluir.");
+                    }
+                  }
+                  setRemoveId(null);
+                })();
               }}
             >
               Confirmar exclusão

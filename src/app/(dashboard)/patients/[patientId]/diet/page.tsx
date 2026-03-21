@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/layout/dashboard/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PlanMealsByPeriod } from "@/components/patient-portal/plan-meals-by-period";
 import { Chip } from "@/components/ui/chip";
-import { useDraftPatients, useDraftPlans } from "@/hooks/use-draft-data";
+import { useSupabasePatients } from "@/hooks/use-supabase-patients";
+import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { getPublishedPlanForPatient, getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
 import { buttonClassName } from "@/components/ui/button";
 
@@ -15,14 +16,29 @@ export default function PatientDietPreviewPage() {
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
-  const { patients } = useDraftPatients();
-  const { plans } = useDraftPlans();
+  const { patients, loading: lp } = useSupabasePatients();
+  const { plans, loading: lpl } = useSupabaseDietPlans();
 
   const patient = patients.find((p) => p.id === patientId);
   const plan = patient ? getPublishedPlanForPatient(patient.id, plans) : null;
   const lastAt = getLastPlanRevisionAt(plan);
 
-  if (!patientId || !patient) {
+  if (!patientId) {
+    return (
+      <EmptyState
+        title="Paciente não encontrado"
+        action={{ label: "Voltar", onClick: () => router.push("/patients") }}
+      />
+    );
+  }
+
+  if (lp || lpl) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando…</div>
+    );
+  }
+
+  if (!patient) {
     return (
       <EmptyState
         title="Paciente não encontrado"
@@ -56,7 +72,7 @@ export default function PatientDietPreviewPage() {
       <PageHeader
         eyebrow="Pré-visualização"
         title={`Plano de ${patient.name}`}
-        description="Mesma estrutura que o paciente verá em “Meu plano”, após publicação e login com o e-mail cadastrado."
+        description="Mesma estrutura que o paciente verá em /meu-plano após publicação no Supabase e login com o e-mail cadastrado."
       />
       <div className="flex flex-wrap gap-2">
         <Chip tone="success">Publicado</Chip>
