@@ -15,14 +15,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
   return (
     <div className={cn("space-y-2", className)}>
       {label ? (
-        <label htmlFor={inputId} className="block text-body14 font-semibold text-text-secondary">
+        <label htmlFor={inputId} className="block text-small12 font-bold uppercase tracking-wide text-text-muted">
           {label}
         </label>
       ) : null}
       <input
         id={inputId}
         ref={ref}
-        className="h-11 w-full rounded-lg border border-neutral-200 bg-bg-0 px-4 text-sm text-text-primary placeholder:text-neutral-400 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--color-ring))]"
+        className="h-11 w-full rounded-xl border border-neutral-200/90 bg-bg-0 px-4 text-sm text-text-primary shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-primary/30 focus:ring-2 focus:ring-primary/15 focus-visible:outline-none"
         {...props}
       />
       {error ? <p className="text-small12 text-orange">{error}</p> : null}

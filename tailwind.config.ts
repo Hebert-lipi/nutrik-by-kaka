@@ -54,8 +54,9 @@ const config: Config = {
         xl: "22px",
       },
       boxShadow: {
-        card: "0 10px 30px rgba(16, 24, 40, 0.06)",
-        soft: "0 6px 18px rgba(16, 24, 40, 0.06)",
+        card: "0 12px 40px rgba(15, 23, 42, 0.07)",
+        soft: "0 8px 24px rgba(15, 23, 42, 0.06)",
+        lift: "0 2px 8px rgba(15, 23, 42, 0.04)",
       },
       fontSize: {
         h1: ["2rem", { lineHeight: "2.25rem", fontWeight: "600" }], // 32px

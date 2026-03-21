@@ -130,3 +130,31 @@ export function IconClose({ className }: { className?: string }) {
   );
 }
 
+export function IconSearch({ className }: { className?: string }) {
+  return (
+    <IconBase className={className}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <circle cx="7.5" cy="7.5" r="4.75" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M11 11l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </IconBase>
+  );
+}
+
+export function IconBell({ className }: { className?: string }) {
+  return (
+    <IconBase className={className}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path
+          d="M9 2.5c2.2 0 4 1.6 4 4.2v1.8l.8 2.4H4.2l.8-2.4V6.7c0-2.6 1.8-4.2 4-4.2Z"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <path d="M6.8 13.5h4.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M8 15.2h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    </IconBase>
+  );
+}
+

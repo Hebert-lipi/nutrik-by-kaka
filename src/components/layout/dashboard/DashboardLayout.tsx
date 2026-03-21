@@ -29,21 +29,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-bg-1">
       <div className="mx-auto flex max-w-[1440px] gap-5 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-        <Sidebar currentPath={pathname} mode={isDietRoute ? "diet" : "dashboard"} />
+        <Sidebar currentPath={pathname} />
 
         <div className={cn("min-w-0 flex-1")}>
-          {!isDietRoute ? <Topbar title={finalTitle} currentPath={pathname} /> : null}
-          <main
-            className={cn(
-              isDietRoute ? "mt-0" : "mt-5 md:mt-8",
-              "mx-auto w-full max-w-6xl pb-10 md:pb-12",
-            )}
-          >
-            {children}
-          </main>
+          <Topbar title={finalTitle} currentPath={pathname} />
+          <main className="mx-auto mt-5 w-full max-w-6xl pb-10 md:mt-8 md:pb-12">{children}</main>
         </div>
       </div>
     </div>
   );
 }
-

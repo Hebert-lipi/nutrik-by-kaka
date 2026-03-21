@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { MealCard, type MenuMeta, type MealMacros, type DifficultyLabel } from "@/components/ui/meal-card";
-
-type MacroKey = "calories" | "carbsG" | "proteinG" | "fatsG";
+import { PageHeader } from "@/components/layout/dashboard/page-header";
 
 function MacroStatCard({
   label,
@@ -14,7 +13,7 @@ function MacroStatCard({
   accent?: string;
 }) {
   return (
-    <Card className="rounded-xl border border-neutral-200 bg-bg-0 p-4 shadow-soft">
+    <Card className="rounded-2xl border border-neutral-200/80 bg-bg-0 p-4 shadow-soft">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-small12 font-semibold text-text-secondary">{label}</p>
         <p className="text-body16Semi font-extrabold text-text-primary">{value}</p>
@@ -34,8 +33,8 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-body14 font-extrabold text-text-primary">{title}</h2>
+    <section className="space-y-4">
+      <h2 className="text-title16 font-extrabold text-text-primary">{title}</h2>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -144,22 +143,17 @@ const popularItems = [menuItems[1], menuItems[5], menuItems[3]] as const;
 const recommendedItems = [menuItems[0], menuItems[4], menuItems[6]] as const;
 
 export default function PatientDietView({ params }: { params: { patientId: string } }) {
-  void params; // placeholder for MVP
+  void params;
 
   return (
-    <div className="space-y-4 pb-2">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/20" />
-          <div>
-            <p className="text-title16 font-extrabold text-text-primary">Nutrik by Kaká</p>
-            <p className="mt-1 text-body14 text-text-secondary">Cardápio saudável</p>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-8 pb-4">
+      <PageHeader
+        eyebrow="Cardápio"
+        title="Refeições e categorias"
+        description="Prato em destaque, macronutrientes e listas por momento do dia — pronto para associar ao plano do paciente."
+      />
 
-      {/* Featured Meal */}
+      {/* Prato em destaque */}
       <MealCard layout="featured" {...featuredMeal} imageSlot={null} ctaLabel="Adicionar ao plano" />
 
       {/* Macronutrients */}

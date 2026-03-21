@@ -10,13 +10,24 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
 export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className={cn("border-b border-neutral-200 bg-neutral-50 px-4 py-3 font-semibold text-text-secondary", className)}
+      className={cn(
+        "border-b border-neutral-200/80 bg-neutral-50/90 px-4 py-3.5 text-left text-small12 font-bold uppercase tracking-wide text-text-muted",
+        className,
+      )}
       {...props}
     />
   );
 }
 
 export function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("border-b border-neutral-200 px-4 py-3 text-text-primary", className)} {...props} />;
+  return (
+    <td
+      className={cn(
+        "border-b border-neutral-100 px-4 py-3.5 text-body14 text-text-primary transition-colors",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
