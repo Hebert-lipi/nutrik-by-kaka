@@ -81,6 +81,26 @@ const config: Config = {
       ringColor: {
         DEFAULT: "rgb(var(--color-ring))",
       },
+      keyframes: {
+        "login-enter": {
+          "0%": { opacity: "0", transform: "translateY(22px) scale(0.97)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "login-shimmer": {
+          "0%, 100%": { opacity: "0.2", transform: "translateX(-30%) skewX(-15deg)" },
+          "50%": { opacity: "0.45", transform: "translateX(50%) skewX(-15deg)" },
+        },
+        "login-orb": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(5%, -5%) scale(1.06)" },
+          "66%": { transform: "translate(-4%, 4%) scale(0.94)" },
+        },
+      },
+      animation: {
+        "login-enter": "login-enter 0.8s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "login-shimmer": "login-shimmer 10s ease-in-out infinite",
+        "login-orb": "login-orb 20s ease-in-out infinite",
+      },
     },
   },
   plugins: [],
