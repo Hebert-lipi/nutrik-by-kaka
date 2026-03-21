@@ -22,10 +22,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
+        "https://nutrik-by-kaka-3yft.vercel.app";
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: {
-          emailRedirectTo: "http://localhost:3000/dashboard",
+          emailRedirectTo: `${baseUrl}/dashboard`,
         },
       });
 
