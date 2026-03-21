@@ -9,6 +9,7 @@ import {
   draftPlanToStructure,
   type DietPlanRow,
 } from "@/lib/supabase/plan-mapper";
+import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
 
 export function useSupabaseDietPlans() {
   const [plans, setPlans] = React.useState<DraftPlan[]>([]);
@@ -79,6 +80,7 @@ export function useSupabaseDietPlans() {
 
       const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
       if (upErr) throw new Error(upErr.message);
+      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
       await refresh();
     },
     [refresh],
@@ -118,6 +120,7 @@ export function useSupabaseDietPlans() {
 
       const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
       if (upErr) throw new Error(upErr.message);
+      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
       await refresh();
     },
     [refresh],
@@ -151,6 +154,12 @@ export function useSupabaseDietPlans() {
         })
         .eq("id", id);
       if (upErr) throw new Error(upErr.message);
+      const { data: row } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
+      if (row) {
+        const pl = dietPlanRowToDraftPlan(row as DietPlanRow);
+        const { data: u } = await supabase.auth.getUser();
+        await insertDietPlanVersion(id, draftPlanToStructure(pl), u.user?.id ?? null);
+      }
       await refresh();
     },
     [plans, refresh],

@@ -17,9 +17,9 @@
 | Leitura | Paciente | Somente **última versão publicada** (modelo atual: um plano publicado por paciente) |
 | Isolamento | Backend | RLS: paciente lê só seu plano; nutricionista escopo por `professional_id` |
 
-## Portal do paciente — adesão (ainda local)
+## Portal do paciente — adesão
 
-- `src/lib/patient-adherence-storage.ts` continua em **localStorage** (próximo passo: tabela `patient_meal_logs` no Supabase).
+- Tabela **`patient_adherence_logs`** (Supabase): refeição/dia, dificuldade, observação diária (`scope` meal | daily).
 
 ## Histórico e segurança
 

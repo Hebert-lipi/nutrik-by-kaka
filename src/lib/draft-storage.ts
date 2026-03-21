@@ -11,6 +11,8 @@ export type DraftPatient = {
   clinicalNotes?: string;
   /** ISO 8601 — última atualização local do cadastro. */
   updatedAt?: string;
+  /** ISO 8601 — criação no servidor (Supabase). */
+  createdAt?: string;
 };
 
 /** Unidade principal da porção (quantidade + unidade). */

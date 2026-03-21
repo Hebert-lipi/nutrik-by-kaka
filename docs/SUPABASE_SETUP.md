@@ -14,6 +14,12 @@ Isso cria:
 - Função RPC `claim_patient_by_email()`
 - Políticas RLS (nutricionista vs paciente)
 
+### Migration adicional (adesão, versões, ack)
+
+Execute também o arquivo **`supabase/migrations/20260321130000_adherence_versions_ack.sql`** no SQL Editor (após a migration MVP base).
+
+Cria: `patient_adherence_logs`, `diet_plan_versions`, `patient_plan_ack` e respectivas políticas RLS.
+
 ## 2. Variáveis de ambiente
 
 No `.env.local` (e no deploy), mantenha:
@@ -38,5 +44,14 @@ No `.env.local` (e no deploy), mantenha:
 ## 5. Limitações do MVP
 
 - Histórico de revisões fica dentro de `structure_json` (sem tabela `plan_revisions`).
-- Adesão do paciente (`/meu-plano`) continua em **localStorage** até próxima fase.
+- Adesão e histórico de versões usam Supabase (`patient_adherence_logs`, `diet_plan_versions`) — exige a migration adicional acima.
 - Dois cadastros de paciente com o mesmo e-mail em nutricionistas diferentes: o RPC `claim` associa a linha **mais antiga** — evite no demo.
+
+### Erro: `Could not find the table 'public.diet_plan_versions' in the schema cache`
+
+Significa que o **PostgREST** não enxerga a tabela: em geral a migration `20260321130000_adherence_versions_ack.sql` **não foi executada** no mesmo projeto das variáveis `NEXT_PUBLIC_SUPABASE_*`.
+
+1. **SQL Editor** no dashboard → cole e execute o arquivo completo da migration.
+2. Se a tabela já existir no **Table Editor** mas o erro continuar: em **Project Settings** tente **Pause** e **Restore** do projeto (força reload do schema), ou aguarde alguns minutos.
+
+Enquanto isso, o app pode ignorar o insert em `diet_plan_versions` e ainda gravar o plano em `diet_plans` (duplicar / salvar não deve falhar só por isso).

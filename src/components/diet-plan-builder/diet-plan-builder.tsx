@@ -25,6 +25,7 @@ import { PlanMetaSection } from "./plan-meta-section";
 import { MealSection } from "./meal-section";
 import { PlanPreviewModal } from "./plan-preview-modal";
 import { PlanBuilderContextStrip } from "./plan-builder-context-strip";
+import { fetchPlanVersions, type DietPlanVersionRow } from "@/lib/supabase/plan-versions";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
 
@@ -76,6 +77,10 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const [mealOverId, setMealOverId] = React.useState<string | null>(null);
   const [revisionAuthorLabel, setRevisionAuthorLabel] = React.useState("Profissional (local)");
   const [revisionAuthorUserId, setRevisionAuthorUserId] = React.useState<string | null>(null);
+  const [dbVersions, setDbVersions] = React.useState<DietPlanVersionRow[]>([]);
+  const [versionsLoading, setVersionsLoading] = React.useState(false);
+  const [versionsError, setVersionsError] = React.useState<string | null>(null);
+  const [versionListKey, setVersionListKey] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -118,6 +123,29 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       };
     }
   }, [mode, planId, fetchPlanById]);
+
+  React.useEffect(() => {
+    if (mode !== "edit" || !plan?.id) {
+      setDbVersions([]);
+      return;
+    }
+    let cancelled = false;
+    setVersionsLoading(true);
+    setVersionsError(null);
+    void fetchPlanVersions(plan.id)
+      .then((rows) => {
+        if (!cancelled) setDbVersions(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setVersionsError(e instanceof Error ? e.message : "Erro ao carregar versões");
+      })
+      .finally(() => {
+        if (!cancelled) setVersionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, plan?.id, versionListKey]);
 
   const updatePlan = React.useCallback((updater: (p: DraftPlan) => DraftPlan) => {
     setPlan((p) => {
@@ -168,6 +196,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     try {
       await savePlanFromBuilder(toSave);
       setPlan(toSave);
+      setVersionListKey((k) => k + 1);
       setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       if (mode === "new") {
         router.replace(`/diet-plans/${toSave.id}/edit`);
@@ -274,37 +303,65 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         onPatientHeaderLabelChange={(patientHeaderLabel) => updatePlan((p) => ({ ...p, patientHeaderLabel }))}
       />
 
-      {plan.revisionHistory.length > 0 ? (
+      {mode === "edit" ? (
         <Card className="border-neutral-200/55">
           <CardHeader className="border-b border-neutral-100/90 pb-3">
-            <p className="text-title16 font-extrabold text-text-primary">Histórico de versões</p>
+            <p className="text-title16 font-extrabold text-text-primary">Histórico de versões (Supabase)</p>
             <p className="mt-1 text-small12 font-semibold text-text-secondary">
-              Cada salvamento registra um snapshot com data/hora. Em breve: restaurar versão anterior.
+              Cada “Salvar” ou “Publicar” gera uma linha em <span className="font-mono">diet_plan_versions</span> — o plano atual continua editável.
             </p>
           </CardHeader>
           <CardContent className="pt-4">
-            <ul className="max-h-48 space-y-2 overflow-y-auto text-small12">
-              {[...plan.revisionHistory].reverse().map((rev) => (
-                <li
-                  key={rev.id}
-                  className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-neutral-100/90 bg-neutral-50/50 px-3 py-2"
-                >
-                  <span className="font-extrabold text-text-primary">v{rev.versionNumber}</span>
-                  <span className="font-semibold text-text-muted">
-                    {new Date(rev.savedAt).toLocaleString("pt-BR", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </span>
-                  <span className="w-full text-[11px] text-text-secondary sm:w-auto">
-                    {rev.name} · {rev.meals.length} refeição(ões)
-                    {rev.changedByLabel ? (
-                      <span className="mt-0.5 block font-semibold text-text-muted">Por {rev.changedByLabel}</span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {versionsLoading ? (
+              <p className="text-small12 font-semibold text-text-muted">Carregando versões…</p>
+            ) : versionsError ? (
+              <p className="text-small12 font-bold text-orange">{versionsError}</p>
+            ) : dbVersions.length > 0 ? (
+              <ul className="max-h-56 space-y-2 overflow-y-auto text-small12">
+                {dbVersions.map((row) => {
+                  const mealsLen = Array.isArray((row.structure_json as { meals?: unknown[] })?.meals)
+                    ? (row.structure_json as { meals: unknown[] }).meals.length
+                    : 0;
+                  return (
+                    <li
+                      key={row.id}
+                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-neutral-100/90 bg-neutral-50/50 px-3 py-2"
+                    >
+                      <span className="font-extrabold text-text-primary">Snapshot</span>
+                      <span className="font-semibold text-text-muted">
+                        {new Date(row.created_at).toLocaleString("pt-BR", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                      <span className="w-full text-[11px] text-text-secondary sm:w-auto">
+                        {mealsLen} refeição(ões) nesta versão
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : plan.revisionHistory.length > 0 ? (
+              <ul className="max-h-48 space-y-2 overflow-y-auto text-small12">
+                <p className="mb-2 text-[11px] font-semibold text-text-muted">Versões antigas só no JSON (antes da migration).</p>
+                {[...plan.revisionHistory].reverse().map((rev) => (
+                  <li
+                    key={rev.id}
+                    className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-neutral-100/90 bg-neutral-50/50 px-3 py-2"
+                  >
+                    <span className="font-extrabold text-text-primary">v{rev.versionNumber}</span>
+                    <span className="font-semibold text-text-muted">
+                      {new Date(rev.savedAt).toLocaleString("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-small12 text-text-muted">Nenhuma versão registrada ainda — salve o plano para criar a primeira.</p>
+            )}
           </CardContent>
         </Card>
       ) : null}

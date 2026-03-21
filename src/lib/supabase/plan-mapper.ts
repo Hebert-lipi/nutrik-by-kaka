@@ -104,5 +104,6 @@ export function patientRowToDraftPatient(row: PatientRow): DraftPatient {
     clinicalStatus: row.status,
     clinicalNotes: row.notes,
     updatedAt: row.updated_at,
+    createdAt: row.created_at,
   };
 }

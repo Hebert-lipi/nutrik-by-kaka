@@ -13,6 +13,7 @@ import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { patientDietSummary } from "@/lib/clinical/dashboard-snapshot";
 import type { PatientClinicalStatus } from "@/lib/draft-storage";
 import { getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
+import { fetchAdherenceLogsForPatient, type AdherenceLogRow } from "@/lib/supabase/patient-adherence-db";
 
 const STATUS_LABEL: Record<PatientClinicalStatus, string> = {
   active: "Ativo",
@@ -41,10 +42,22 @@ export default function PatientDetailPage() {
   const linked = patient ? getPlansLinkedToPatient(patient.id, plans) : [];
 
   const [notes, setNotes] = React.useState(patient?.clinicalNotes ?? "");
+  const [adherenceLogs, setAdherenceLogs] = React.useState<AdherenceLogRow[]>([]);
 
   React.useEffect(() => {
     setNotes(patient?.clinicalNotes ?? "");
   }, [patient?.clinicalNotes, patient?.id]);
+
+  React.useEffect(() => {
+    if (!patient?.id) return;
+    let cancelled = false;
+    void fetchAdherenceLogsForPatient(patient.id, 50).then((rows) => {
+      if (!cancelled) setAdherenceLogs(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [patient?.id]);
 
   if (!patientId) {
     return (
@@ -224,33 +237,35 @@ export default function PatientDetailPage() {
 
       <Card>
         <CardHeader className="border-b border-neutral-100/90 pb-4">
-          <p className="text-title16 font-extrabold text-text-primary">Atividade, adesão e registros</p>
+          <p className="text-title16 font-extrabold text-text-primary">Adesão e registros (Supabase)</p>
           <p className="mt-1 text-small12 text-text-secondary">
-            Central de acompanhamento — hoje os registros do paciente ficam no portal <span className="font-bold">Meu plano</span> (local). Em
-            produção, sincronizamos com o servidor para métricas e alertas.
+            Dados enviados pelo paciente em <span className="font-bold">/meu-plano</span> — refeições, dificuldade e observação do dia.
           </p>
         </CardHeader>
         <CardContent className="pt-5">
-          <ul className="space-y-3 text-body14 text-text-secondary">
-            <li className="flex gap-2">
-              <span className="font-extrabold text-primary">·</span>
-              <span>
-                <span className="font-bold text-text-primary">Adesão às refeições</span> — marcação de refeição realizada e nível de dificuldade (paciente).
-              </span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-extrabold text-primary">·</span>
-              <span>
-                <span className="font-bold text-text-primary">Observação diária</span> — notas livres do paciente sobre o dia.
-              </span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-extrabold text-primary">·</span>
-              <span>
-                <span className="font-bold text-text-primary">Próximos passos</span> — gráficos de adesão, lembretes e integração com wearables (roadmap).
-              </span>
-            </li>
-          </ul>
+          {adherenceLogs.length === 0 ? (
+            <p className="text-body14 text-text-muted">Ainda não há registros de adesão para este paciente.</p>
+          ) : (
+            <ul className="max-h-64 space-y-2 overflow-y-auto text-small12">
+              {adherenceLogs.map((log) => (
+                <li
+                  key={log.id}
+                  className="rounded-xl border border-neutral-100/90 bg-neutral-50/40 px-3 py-2 font-semibold text-text-secondary"
+                >
+                  <span className="font-extrabold text-text-primary">
+                    {log.log_date} · {log.scope === "daily" ? "Dia" : `Refeição ${log.meal_id?.slice(0, 8)}…`}
+                  </span>
+                  {log.scope === "meal" ? (
+                    <span className="mt-1 block text-[11px]">
+                      {log.completed ? "Realizada" : "Pendente"} · Dificuldade: {log.difficulty}
+                    </span>
+                  ) : (
+                    <span className="mt-1 block text-[11px] text-text-muted">{log.notes || "—"}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

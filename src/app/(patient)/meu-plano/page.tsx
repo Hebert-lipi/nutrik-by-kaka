@@ -3,15 +3,35 @@
 import * as React from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { loadPatientPortalState } from "@/lib/supabase/patient-portal";
+import {
+  ensurePatientPlanAckBaseline,
+  fetchLatestVersionTime,
+  fetchPatientPlanAck,
+  upsertPatientPlanAck,
+} from "@/lib/supabase/plan-versions";
 import { PlanMealsByPeriod } from "@/components/patient-portal/plan-meals-by-period";
 import { Card, CardContent } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
 
+const POLL_MS = 22_000;
+
 export default function MeuPlanoPage() {
   const [email, setEmail] = React.useState<string | null | undefined>(undefined);
   const [portal, setPortal] = React.useState<Awaited<ReturnType<typeof loadPatientPortalState>> | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [latestVersionAt, setLatestVersionAt] = React.useState<string | null>(null);
+  const [ackAt, setAckAt] = React.useState<string | null>(null);
+  const [refreshBusy, setRefreshBusy] = React.useState(false);
+
+  const refreshVersionMeta = React.useCallback(async (patientId: string, planId: string) => {
+    const [latest, ack] = await Promise.all([
+      fetchLatestVersionTime(planId),
+      fetchPatientPlanAck(patientId, planId),
+    ]);
+    setLatestVersionAt(latest);
+    setAckAt(ack);
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -23,22 +43,34 @@ export default function MeuPlanoPage() {
     };
   }, []);
 
+  const loadPortal = React.useCallback(async () => {
+    if (!email?.trim()) return;
+    setLoadError(null);
+    try {
+      const res = await loadPatientPortalState(email);
+      setPortal(res);
+      if (res.kind === "ok") {
+        await ensurePatientPlanAckBaseline(res.patient.id, res.plan.id);
+        await refreshVersionMeta(res.patient.id, res.plan.id);
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Erro ao carregar.");
+    }
+  }, [email, refreshVersionMeta]);
+
   React.useEffect(() => {
     if (email === undefined || email === null) return;
-    let cancelled = false;
-    setLoadError(null);
-    void (async () => {
-      try {
-        const res = await loadPatientPortalState(email);
-        if (!cancelled) setPortal(res);
-      } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Erro ao carregar.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [email]);
+    void loadPortal();
+  }, [email, loadPortal]);
+
+  React.useEffect(() => {
+    if (portal?.kind !== "ok") return;
+    const { patient, plan } = portal;
+    const t = window.setInterval(() => {
+      void refreshVersionMeta(patient.id, plan.id);
+    }, POLL_MS);
+    return () => window.clearInterval(t);
+  }, [portal, refreshVersionMeta]);
 
   if (email === undefined) {
     return (
@@ -63,7 +95,7 @@ export default function MeuPlanoPage() {
       <Card className="border-orange/25 bg-orange/[0.06]">
         <CardContent className="py-10 text-center text-body14 text-text-secondary">
           {loadError}
-          <p className="mt-3 text-small12 text-text-muted">Confira se a migration SQL foi aplicada no Supabase.</p>
+          <p className="mt-3 text-small12 text-text-muted">Confira migrations em supabase/migrations (adesão, versões, ack).</p>
         </CardContent>
       </Card>
     );
@@ -118,7 +150,25 @@ export default function MeuPlanoPage() {
   }
 
   const { patient, plan } = portal;
-  const lastAt = getLastPlanRevisionAt(plan);
+  const revisionFallback = getLastPlanRevisionAt(plan);
+  const displayUpdatedIso = latestVersionAt ?? revisionFallback;
+  const updatePending = Boolean(
+    latestVersionAt && (!ackAt || new Date(latestVersionAt).getTime() > new Date(ackAt).getTime()),
+  );
+
+  const handleRefreshPlan = async () => {
+    setRefreshBusy(true);
+    try {
+      await loadPortal();
+      const latest = await fetchLatestVersionTime(plan.id);
+      const ts = latest ?? new Date().toISOString();
+      await upsertPatientPlanAck(patient.id, plan.id, ts);
+      setAckAt(ts);
+      setLatestVersionAt(latest);
+    } finally {
+      setRefreshBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -134,15 +184,13 @@ export default function MeuPlanoPage() {
         meals={plan.meals}
         planName={plan.name}
         subtitle="Sua rotina"
-        lastUpdatedIso={lastAt}
+        lastUpdatedIso={displayUpdatedIso}
         adherence={{ patientId: patient.id, planId: plan.id }}
-        headerBadge={
-          lastAt ? (
-            <Chip tone="primary" className="font-extrabold">
-              Atualização disponível
-            </Chip>
-          ) : null
-        }
+        planUpdate={{
+          pending: updatePending,
+          onRefresh: handleRefreshPlan,
+          busy: refreshBusy,
+        }}
       />
     </div>
   );

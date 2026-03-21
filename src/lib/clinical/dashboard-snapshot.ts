@@ -2,6 +2,20 @@ import type { ActivityItem } from "@/lib/dashboard-insights";
 import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
 import { getLastPlanRevisionAt, getPublishedPlanForPatient } from "@/lib/clinical/patient-plan";
 
+export type DietPlanVersionEvent = {
+  id: string;
+  plan_id: string;
+  created_at: string;
+};
+
+function formatActivityTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 /**
  * Visão única do painel — alimentada por Supabase (MVP).
  */
@@ -30,36 +44,66 @@ export type DashboardSnapshot = {
   };
 };
 
-function buildRealActivity(patients: DraftPatient[], plans: DraftPlan[]): ActivityItem[] {
+function buildRealActivity(
+  patients: DraftPatient[],
+  plans: DraftPlan[],
+  versionEvents: DietPlanVersionEvent[] | undefined,
+): ActivityItem[] {
   const items: ActivityItem[] = [];
 
-  patients.slice(0, 8).forEach((p, i) => {
+  (versionEvents ?? []).slice(0, 12).forEach((v) => {
+    const name = plans.find((p) => p.id === v.plan_id)?.name ?? "Plano";
+    items.push({
+      id: `ver-${v.id}`,
+      title: "Plano atualizado (nova versão)",
+      subtitle: name,
+      time: formatActivityTime(v.created_at),
+      variant: "yellow",
+    });
+  });
+
+  const patientsSorted = [...patients].sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+
+  patientsSorted.slice(0, 6).forEach((p) => {
     items.push({
       id: `patient-${p.id}`,
-      title: "Paciente no diretório",
+      title: "Paciente cadastrado",
       subtitle: p.name,
-      time: i === 0 ? "Recente" : "Cadastro",
+      time: p.createdAt ? formatActivityTime(p.createdAt) : "Cadastro",
       variant: "primary",
     });
   });
 
   plans
     .filter((pl) => pl.status === "published")
-    .slice(0, 5)
-    .forEach((pl, i) => {
+    .sort((a, b) => {
+      const pa = a.name;
+      const pb = b.name;
+      return pa.localeCompare(pb);
+    })
+    .slice(0, 4)
+    .forEach((pl) => {
       items.push({
         id: `plan-pub-${pl.id}`,
-        title: "Plano publicado",
+        title: "Plano publicado na biblioteca",
         subtitle: pl.name,
-        time: i === 0 ? "Biblioteca" : "Publicação",
+        time: "Ativo",
         variant: "yellow",
       });
     });
 
-  return items.slice(0, 12);
+  return items.slice(0, 16);
 }
 
-export function buildDashboardSnapshot(patients: DraftPatient[], plans: DraftPlan[]): DashboardSnapshot {
+export function buildDashboardSnapshot(
+  patients: DraftPatient[],
+  plans: DraftPlan[],
+  versionEvents?: DietPlanVersionEvent[],
+): DashboardSnapshot {
   const publishedPlans = plans.filter((p) => p.status === "published");
   const activePatients = patients.filter((p) => (p.clinicalStatus ?? "active") === "active").length;
 
@@ -71,7 +115,7 @@ export function buildDashboardSnapshot(patients: DraftPatient[], plans: DraftPla
       publishedPlans: publishedPlans.length,
       activePatients,
     },
-    activity: buildRealActivity(patients, plans),
+    activity: buildRealActivity(patients, plans, versionEvents),
     recentPatients: patients.slice(0, 5),
     recentPlans: plans.slice(0, 4),
     operational: {
