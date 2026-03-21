@@ -1,7 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
-const SUPABASE_URL = "https://yabrbvamxgvfyfqfndiv.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Yp0mhnNQsEejrGJjRHc4aA_MaSU_XGv";
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+/**
+ * Cliente no navegador com sessão em cookies (compatível com o middleware).
+ * Mantém o usuário logado ao fechar/abrir o app (refresh automático de token).
+ */
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);

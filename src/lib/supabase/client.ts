@@ -1,27 +1,11 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
-let _client: SupabaseClient | null = null;
-
-function getEnvUrl() {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL;
+/**
+ * Mesmo cliente do app (`supabaseClient.ts`), exposto para uso futuro.
+ * `createBrowserClient` reutiliza singleton no navegador.
+ */
+export function getSupabaseClient(): SupabaseClient {
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
-
-function getEnvAnonKey() {
-  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-}
-
-export function getSupabaseClient(): SupabaseClient | null {
-  if (_client) return _client;
-
-  const url = getEnvUrl();
-  const key = getEnvAnonKey();
-
-  if (!url || !key) return null;
-
-  _client = createClient(url, key, {
-    auth: { persistSession: true, autoRefreshToken: true },
-  });
-
-  return _client;
-}
-
