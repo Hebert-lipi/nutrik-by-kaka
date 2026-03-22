@@ -125,7 +125,10 @@ export default function PatientPlanoModulePage() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 pt-5">
-          <Link href="/diet-plans/new" className={buttonClassName("primary", "md", "rounded-xl")}>
+          <Link
+            href={`/diet-plans/new?patientId=${encodeURIComponent(patientId)}`}
+            className={buttonClassName("primary", "md", "rounded-xl")}
+          >
             Criar plano
           </Link>
           {published ? (
@@ -193,7 +196,10 @@ export default function PatientPlanoModulePage() {
           <Card className="border-dashed border-neutral-300/90 bg-neutral-50/40 shadow-inner">
             <CardContent className="py-12 text-center">
               <p className="text-body14 font-semibold text-text-muted">Nenhum plano vinculado ainda.</p>
-              <Link href="/diet-plans/new" className={buttonClassName("primary", "md", "mt-4 inline-flex rounded-xl")}>
+              <Link
+                href={`/diet-plans/new?patientId=${encodeURIComponent(patientId)}`}
+                className={buttonClassName("primary", "md", "mt-4 inline-flex rounded-xl")}
+              >
                 Criar primeiro plano
               </Link>
             </CardContent>
@@ -273,7 +279,10 @@ export default function PatientPlanoModulePage() {
           <EmptyState
             title="Sem cardápio no portal"
             description="Publique um plano vinculado a este paciente."
-            action={{ label: "Criar plano", onClick: () => router.push("/diet-plans/new") }}
+            action={{
+              label: "Criar plano",
+              onClick: () => router.push(`/diet-plans/new?patientId=${encodeURIComponent(patientId)}`),
+            }}
           />
         ) : (
           <>

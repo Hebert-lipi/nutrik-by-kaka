@@ -153,19 +153,54 @@ export function useSupabaseDietPlans() {
       ) {
         throw new Error("Selecione um paciente neste plano no editor antes de publicar.");
       }
-      const { error: upErr } = await supabase
-        .from("diet_plans")
-        .update({
-          status: nextStatus,
-          published_at: nextStatus === "published" ? new Date().toISOString() : null,
-        })
-        .eq("id", id);
-      if (upErr) throw new Error(upErr.message);
+
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id ?? null;
+
+      if (nextStatus === "published") {
+        if (current.planKind === "patient_plan" && current.linkedPatientId) {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc("publish_diet_plan_for_patient", {
+            p_plan_id: id,
+          });
+          if (rpcErr) throw new Error(rpcErr.message);
+          const payload = rpcData as { ok?: boolean; error?: string } | null;
+          if (!payload?.ok) {
+            const code = payload?.error ?? "unknown";
+            const msg =
+              code === "plan_requires_patient"
+                ? "Este plano precisa estar vinculado a um paciente para publicar."
+                : code === "forbidden"
+                  ? "Sem permissão para publicar este plano."
+                  : code === "plan_not_found"
+                    ? "Plano não encontrado."
+                    : "Não foi possível publicar o plano.";
+            throw new Error(msg);
+          }
+        } else {
+          const { error: upErr } = await supabase
+            .from("diet_plans")
+            .update({
+              status: "published",
+              published_at: new Date().toISOString(),
+            })
+            .eq("id", id);
+          if (upErr) throw new Error(upErr.message);
+        }
+      } else {
+        const { error: upErr } = await supabase
+          .from("diet_plans")
+          .update({
+            status: "draft",
+            published_at: null,
+          })
+          .eq("id", id);
+        if (upErr) throw new Error(upErr.message);
+      }
+
       const { data: row } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
       if (row) {
         const pl = dietPlanRowToDraftPlan(row as DietPlanRow);
-        const { data: u } = await supabase.auth.getUser();
-        await insertDietPlanVersion(id, draftPlanToStructure(pl), u.user?.id ?? null);
+        await insertDietPlanVersion(id, draftPlanToStructure(pl), uid);
       }
       await refresh();
     },

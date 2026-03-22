@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getUserContext, isInternalWorkspacePath, resolvePostAuthPath } from "@/lib/auth/user-context";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
 function applySupabaseCookies(from: NextResponse, to: NextResponse) {
@@ -37,24 +38,43 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  if (!user) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+    if (pathname === "/login" || pathname.startsWith("/login/")) {
+      return supabaseResponse;
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+  }
+
+  const ctx = await getUserContext(supabase, user);
+
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = user ? "/dashboard" : "/login";
+    url.pathname = resolvePostAuthPath(ctx);
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
-    if (user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
-    }
-    return supabaseResponse;
+    const url = request.nextUrl.clone();
+    url.pathname = resolvePostAuthPath(ctx);
+    return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
-  if (!user) {
+  if (ctx.isNutritionist && pathname.startsWith("/meu-plano")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/dashboard";
+    return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+  }
+
+  if (ctx.isPatient && !ctx.isNutritionist && isInternalWorkspacePath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/meu-plano";
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
@@ -63,10 +83,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Exclui estáticos e imagens; tudo o mais passa pelo middleware para
-     * atualizar a sessão e proteger rotas.
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

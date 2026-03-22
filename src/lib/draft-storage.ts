@@ -165,9 +165,6 @@ export function createEmptyMeal(name = "Nova refeição", index = 0): DraftPlanM
   };
 }
 
-const PATIENTS_KEY = "nutrik.draft.patients.v1";
-const PLANS_KEY = "nutrik.draft.plans.v1";
-
 /** Normaliza paciente salvo (inclui registros legados sem novos campos). */
 function parseSex(raw: unknown): PatientSex | null | undefined {
   if (raw === null || raw === undefined || raw === "") return raw === null ? null : undefined;
@@ -433,38 +430,3 @@ export function snapshotPlanForHistory(
   };
 }
 
-export function loadDraftPatients(): DraftPatient[] {
-  if (typeof window === "undefined") return [];
-  const parsed = safeParse<unknown[]>(localStorage.getItem(PATIENTS_KEY), []);
-  return parsed.map((item) => normalizeDraftPatient(item));
-}
-
-export function saveDraftPatients(list: DraftPatient[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(PATIENTS_KEY, JSON.stringify(list));
-  window.dispatchEvent(new Event("nutrik-draft-storage"));
-}
-
-export function loadDraftPlans(): DraftPlan[] {
-  if (typeof window === "undefined") return [];
-  const parsed = safeParse<unknown[]>(localStorage.getItem(PLANS_KEY), []);
-  return parsed.map((item) => normalizePlan(item));
-}
-
-export function saveDraftPlans(list: DraftPlan[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(PLANS_KEY, JSON.stringify(list));
-  window.dispatchEvent(new Event("nutrik-draft-storage"));
-}
-
-export function getDraftPlanById(id: string): DraftPlan | null {
-  return loadDraftPlans().find((p) => p.id === id) ?? null;
-}
-
-export function upsertDraftPlan(plan: DraftPlan) {
-  const normalized = normalizePlan(plan);
-  const list = loadDraftPlans();
-  const idx = list.findIndex((p) => p.id === normalized.id);
-  const next = idx >= 0 ? list.map((p, i) => (i === idx ? normalized : p)) : [...list, normalized];
-  saveDraftPlans(next);
-}

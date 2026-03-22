@@ -10,6 +10,7 @@ export type MyPlanResult =
 
 /**
  * Vincula auth ao paciente pelo e-mail (RPC) e busca plano publicado mais recente.
+ * RLS + filtro `status = 'published'` + `patient_id` garantem que só há dados do paciente logado.
  */
 export async function loadPatientPortalState(userEmail: string | null | undefined): Promise<MyPlanResult> {
   if (!userEmail?.trim()) return { kind: "no_session" };

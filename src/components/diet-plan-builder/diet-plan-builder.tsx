@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { DraftPlan } from "@/lib/draft-storage";
 import { createEmptyMeal, normalizePlan, snapshotPlanForHistory } from "@/lib/draft-storage";
 import {
@@ -71,6 +71,8 @@ type Props = { mode: "new" | "edit"; planId?: string };
 
 export function DietPlanBuilder({ mode, planId }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preloadPatientId = searchParams.get("patientId");
   const { patients } = useSupabasePatients();
   const { fetchPlanById, savePlanFromBuilder, upsertPlan } = useSupabaseDietPlans();
   const [plan, setPlan] = React.useState<DraftPlan | null>(null);
@@ -105,7 +107,11 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   React.useEffect(() => {
     if (mode === "new") {
       setNotFound(false);
-      setPlan(createNewPlanSkeleton());
+      setPlan(
+        createNewPlanSkeleton(
+          preloadPatientId ? { linkedPatientId: preloadPatientId } : undefined,
+        ),
+      );
       setLoaded(true);
       return;
     }
@@ -128,7 +134,20 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         cancelled = true;
       };
     }
-  }, [mode, planId, fetchPlanById]);
+  }, [mode, planId, fetchPlanById, preloadPatientId]);
+
+  /** Preenche o cabeçalho com o nome do paciente quando a lista carrega após abrir com ?patientId=. */
+  React.useEffect(() => {
+    if (mode !== "new" || !preloadPatientId || plan?.linkedPatientId !== preloadPatientId) return;
+    if (plan.patientHeaderLabel.trim()) return;
+    const p = patients.find((x) => x.id === preloadPatientId);
+    if (!p) return;
+    setPlan((prev) =>
+      prev && prev.linkedPatientId === preloadPatientId && !prev.patientHeaderLabel.trim()
+        ? { ...prev, patientHeaderLabel: p.name }
+        : prev,
+    );
+  }, [mode, preloadPatientId, plan?.linkedPatientId, plan?.patientHeaderLabel, patients]);
 
   React.useEffect(() => {
     if (mode !== "edit" || !plan?.id) {

@@ -225,7 +225,10 @@ export default function PatientResumoPage() {
       <section aria-label="Ações rápidas">
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ações rápidas</p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <Link href="/diet-plans/new" className={buttonClassName("primary", "md", "h-11 w-full justify-center rounded-xl")}>
+          <Link
+            href={`/diet-plans/new?patientId=${encodeURIComponent(patientId)}`}
+            className={buttonClassName("primary", "md", "h-11 w-full justify-center rounded-xl")}
+          >
             Novo plano
           </Link>
           <Button

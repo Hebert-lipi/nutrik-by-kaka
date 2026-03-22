@@ -137,7 +137,7 @@ export default function DashboardPage() {
               <Link href="/patients" className={buttonClassName("primary", "md", "w-full")}>
                 Novo paciente
               </Link>
-              <Link href="/diet-plans" className={buttonClassName("outline", "md", "w-full")}>
+              <Link href="/diet-plans/new" className={buttonClassName("outline", "md", "w-full")}>
                 Novo plano alimentar
               </Link>
             </div>

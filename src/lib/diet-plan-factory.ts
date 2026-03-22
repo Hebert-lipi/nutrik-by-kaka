@@ -56,19 +56,29 @@ export function reorderMeals(meals: DraftPlanMeal[], fromIndex: number, toIndex:
   return next;
 }
 
+export type NewPlanSkeletonOptions = {
+  /** UUID do paciente — abre já como plano atribuído (ex.: `/diet-plans/new?patientId=…`). */
+  linkedPatientId?: string | null;
+  /** Pré-preenche cabeçalho do documento quando conhecido. */
+  patientHeaderLabel?: string;
+};
+
 /** Estado inicial para um plano novo no construtor. */
-export function createNewPlanSkeleton(): DraftPlan {
+export function createNewPlanSkeleton(opts?: NewPlanSkeletonOptions): DraftPlan {
+  const linked =
+    typeof opts?.linkedPatientId === "string" && opts.linkedPatientId.trim() ? opts.linkedPatientId.trim() : null;
+  const header = typeof opts?.patientHeaderLabel === "string" ? opts.patientHeaderLabel.trim() : "";
   return {
     id: crypto.randomUUID(),
     name: "",
     description: "",
     status: "draft",
     patientCount: 0,
-    planKind: "template",
-    linkedPatientId: null,
+    planKind: linked ? "patient_plan" : "template",
+    linkedPatientId: linked,
     professionalName: "",
     professionalRegistration: "",
-    patientHeaderLabel: "",
+    patientHeaderLabel: header,
     meals: [
       createEmptyMeal("Café da manhã", 0),
       createEmptyMeal("Almoço", 1),
