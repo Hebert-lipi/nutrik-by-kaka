@@ -25,7 +25,7 @@ const inputClass =
 const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500";
 
 const primaryBtnClass =
-  "group relative mt-1 w-full overflow-hidden rounded-full bg-primary py-3.5 text-base font-extrabold text-primary-foreground shadow-[0_14px_40px_-12px_rgba(130,150,50,0.5),inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-black/[0.05] transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_18px_48px_-12px_rgba(130,150,50,0.55)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100";
+  "group relative mt-1 w-full overflow-hidden rounded-full bg-primary py-3.5 text-base font-semibold text-primary-foreground shadow-[0_14px_40px_-12px_rgba(130,150,50,0.5),inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-black/[0.05] transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_18px_48px_-12px_rgba(130,150,50,0.55)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100";
 
 function isRateLimitedError(error: { status?: number; message?: string } | null): boolean {
   if (!error) return false;
@@ -229,7 +229,7 @@ export default function LoginPage() {
             <NutrikLogoMark className="mb-8" />
 
             <header className="mb-6 w-full text-center">
-              <h1 className="text-[1.6rem] font-extrabold leading-tight tracking-tight text-text-primary sm:text-[1.85rem]">
+              <h1 className="text-[1.6rem] font-semibold leading-tight tracking-tight text-text-primary sm:text-[1.85rem]">
                 {step === "email" ? "Bem-vindo de volta!" : "Quase lá"}
               </h1>
               <p className="mx-auto mt-3 max-w-[340px] text-body14 leading-relaxed text-text-secondary">
@@ -295,7 +295,7 @@ export default function LoginPage() {
                       )}
                       role="status"
                     >
-                      <p className="font-extrabold text-text-primary">{status.ok ? "Tudo certo" : "Atenção"}</p>
+                      <p className="font-semibold text-text-primary">{status.ok ? "Tudo certo" : "Atenção"}</p>
                       <p className="mt-1">{status.message}</p>
                     </div>
                   ) : null}
@@ -308,7 +308,7 @@ export default function LoginPage() {
                       type="button"
                       onClick={goToEmailStep}
                       disabled={busy}
-                      className="text-[12px] font-extrabold text-secondary underline-offset-2 transition-colors hover:text-primary hover:underline disabled:opacity-45"
+                      className="text-[12px] font-semibold text-secondary underline-offset-2 transition-colors hover:text-primary hover:underline disabled:opacity-45"
                     >
                       Usar outro e-mail
                     </button>
@@ -353,7 +353,7 @@ export default function LoginPage() {
                       type="button"
                       onClick={onResendCode}
                       disabled={busy || sendBlockedByCooldown}
-                      className="text-[13px] font-extrabold text-secondary underline-offset-2 transition-colors hover:text-primary hover:underline disabled:pointer-events-none disabled:opacity-45"
+                      className="text-[13px] font-semibold text-secondary underline-offset-2 transition-colors hover:text-primary hover:underline disabled:pointer-events-none disabled:opacity-45"
                     >
                       {resending ? "Reenviando…" : "Não recebeu? Reenviar código"}
                     </button>
@@ -369,7 +369,7 @@ export default function LoginPage() {
                       )}
                       role="status"
                     >
-                      <p className="font-extrabold text-text-primary">{status.ok ? "Sucesso" : "Atenção"}</p>
+                      <p className="font-semibold text-text-primary">{status.ok ? "Sucesso" : "Atenção"}</p>
                       <p className="mt-1">{status.message}</p>
                     </div>
                   ) : null}

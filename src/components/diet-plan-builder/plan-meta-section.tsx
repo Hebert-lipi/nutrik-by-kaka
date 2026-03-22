@@ -56,6 +56,7 @@ export function PlanMetaSection({
   const onPatientSelect = (id: string) => {
     if (id === "") {
       onLinkedPatientIdChange(null);
+      if (status === "published") onStatusChange("draft");
       return;
     }
     onLinkedPatientIdChange(id);
@@ -103,7 +104,9 @@ export function PlanMetaSection({
               onChange={(e) => onStatusChange(e.target.value as "draft" | "published")}
             >
               <option value="draft">Rascunho</option>
-              <option value="published">Publicado</option>
+              <option value="published" disabled={planKind === "patient_plan" && !linkedPatientId}>
+                Publicado (exige paciente vinculado)
+              </option>
             </select>
           </div>
           <div className="space-y-2">
@@ -143,7 +146,7 @@ export function PlanMetaSection({
                 ))}
               </select>
               <p className="text-[11px] font-semibold text-text-muted">
-                Lista do cadastro local. Futuramente sincroniza com o mesmo ID do servidor.
+                Pacientes do Supabase (mesmo cadastro da página Pacientes). Você pode trocar o vínculo a qualquer momento.
               </p>
             </div>
           ) : (
@@ -168,7 +171,7 @@ export function PlanMetaSection({
 
       <Card className="border-neutral-200/55 border-secondary/15 ring-1 ring-secondary/10">
         <CardHeader className="border-b border-neutral-100/90 pb-4">
-          <p className="text-title16 font-extrabold text-text-primary">Profissional e cabeçalho (PDF / documento)</p>
+          <p className="text-title16 font-semibold text-text-primary">Profissional e cabeçalho (PDF / documento)</p>
           <p className="mt-1 text-small12 font-semibold text-text-secondary">
             Campos para futura exportação em PDF e impressão institucional.
           </p>

@@ -63,7 +63,7 @@ export default function DietPlansPage() {
                 <IconDietPlan className="h-7 w-7 text-neutral-800" />
               </div>
               <div>
-                <p className="text-h4 font-extrabold tracking-tight text-text-primary">Biblioteca de planos</p>
+                <p className="text-h4 font-semibold tracking-tight text-text-primary">Biblioteca de planos</p>
                 <p className="mt-1 max-w-2xl text-body14 leading-relaxed text-text-secondary">
                   Cada plano pode incluir várias refeições e itens. Abra o construtor para ver e editar a estrutura completa.
                 </p>
@@ -171,7 +171,7 @@ export default function DietPlansPage() {
                           >
                             {pl.status === "published" ? "Despublicar" : "Publicar"}
                           </Button>
-                          <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={() => setRemoveId(pl.id)}>
+                          <Button type="button" variant="ghost" size="sm" className="font-semibold text-orange" onClick={() => setRemoveId(pl.id)}>
                             Excluir
                           </Button>
                         </div>

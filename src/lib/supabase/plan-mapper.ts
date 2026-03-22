@@ -1,4 +1,4 @@
-import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
+import type { DraftPatient, DraftPlan, PatientSex, PlanKind } from "@/lib/draft-storage";
 import { normalizePlan, type DraftPlanRevisionSnapshot, type DraftPlanMeal } from "@/lib/draft-storage";
 
 /** Conteúdo clínico persistido em `diet_plans.structure_json`. */
@@ -10,6 +10,9 @@ export type DietPlanStructureJson = {
   revisionHistory: DraftPlanRevisionSnapshot[];
   currentVersionNumber: number;
   patientCount?: number;
+  /** Quando `patient_id` na linha é null (ex.: cópia aguardando vínculo), preserva tipo no editor. */
+  planKind?: PlanKind;
+  linkedPatientId?: string | null;
 };
 
 export type DietPlanRow = {
@@ -35,7 +38,21 @@ export type PatientRow = {
   auth_user_id: string | null;
   created_at: string;
   updated_at: string;
+  phone?: string;
+  birth_date?: string | null;
+  sex?: string | null;
+  portal_access_active?: boolean;
+  portal_can_diet_plan?: boolean;
+  portal_can_recipes?: boolean;
+  portal_can_materials?: boolean;
+  portal_can_shopping?: boolean;
 };
+
+function mapSex(raw: string | null | undefined): PatientSex | null {
+  if (!raw) return null;
+  if (raw === "female" || raw === "male" || raw === "other" || raw === "unspecified") return raw;
+  return null;
+}
 
 function asStructure(raw: unknown): DietPlanStructureJson {
   if (!raw || typeof raw !== "object") {
@@ -46,12 +63,18 @@ function asStructure(raw: unknown): DietPlanStructureJson {
       patientHeaderLabel: "",
       revisionHistory: [],
       currentVersionNumber: 1,
+      planKind: "template",
+      linkedPatientId: null,
     };
   }
   const o = raw as Record<string, unknown>;
   const meals = Array.isArray(o.meals) ? o.meals : [];
   const rev = Array.isArray(o.revisionHistory) ? o.revisionHistory : [];
   const cv = Number(o.currentVersionNumber);
+  const rawKind = o.planKind;
+  const structPlanKind: PlanKind = rawKind === "patient_plan" ? "patient_plan" : "template";
+  const structLinked =
+    typeof o.linkedPatientId === "string" && o.linkedPatientId.trim() ? o.linkedPatientId.trim() : null;
   return {
     meals: meals as DraftPlanMeal[],
     professionalName: typeof o.professionalName === "string" ? o.professionalName : "",
@@ -60,26 +83,45 @@ function asStructure(raw: unknown): DietPlanStructureJson {
     revisionHistory: rev as DraftPlanRevisionSnapshot[],
     currentVersionNumber: Number.isFinite(cv) ? Math.max(1, Math.floor(cv)) : 1,
     patientCount: Number.isFinite(Number(o.patientCount)) ? Math.max(0, Math.floor(Number(o.patientCount))) : undefined,
+    planKind: structPlanKind,
+    linkedPatientId: structLinked,
   };
 }
 
 export function dietPlanRowToDraftPlan(row: DietPlanRow): DraftPlan {
   const s = asStructure(row.structure_json);
-  const patientId = row.patient_id;
+  const rowPatientId = row.patient_id;
+
+  const structKind = s.planKind ?? "template";
+  const structLinked = s.linkedPatientId ?? null;
+
+  const linkedPatientId =
+    rowPatientId !== null && rowPatientId !== undefined && String(rowPatientId).trim()
+      ? String(rowPatientId).trim()
+      : structLinked;
+
+  const planKind: PlanKind =
+    rowPatientId !== null && rowPatientId !== undefined && String(rowPatientId).trim()
+      ? "patient_plan"
+      : structKind === "patient_plan"
+        ? "patient_plan"
+        : "template";
+
   return normalizePlan({
     id: row.id,
     name: row.title,
     description: row.description,
     status: row.status,
-    patientCount: patientId ? 1 : s.patientCount ?? 0,
-    planKind: patientId ? "patient_plan" : "template",
-    linkedPatientId: patientId,
+    patientCount: linkedPatientId ? 1 : s.patientCount ?? 0,
+    planKind,
+    linkedPatientId,
     professionalName: s.professionalName,
     professionalRegistration: s.professionalRegistration,
     patientHeaderLabel: s.patientHeaderLabel,
     meals: s.meals,
     revisionHistory: s.revisionHistory,
     currentVersionNumber: s.currentVersionNumber,
+    publishedAt: row.published_at,
   });
 }
 
@@ -92,6 +134,8 @@ export function draftPlanToStructure(plan: DraftPlan): DietPlanStructureJson {
     revisionHistory: plan.revisionHistory,
     currentVersionNumber: plan.currentVersionNumber,
     patientCount: plan.patientCount,
+    planKind: plan.planKind,
+    linkedPatientId: plan.linkedPatientId,
   };
 }
 
@@ -105,5 +149,13 @@ export function patientRowToDraftPatient(row: PatientRow): DraftPatient {
     clinicalNotes: row.notes,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
+    phone: row.phone ?? "",
+    birthDate: row.birth_date ?? null,
+    sex: mapSex(row.sex ?? undefined),
+    portalAccessActive: row.portal_access_active !== false,
+    portalCanDietPlan: row.portal_can_diet_plan !== false,
+    portalCanRecipes: row.portal_can_recipes !== false,
+    portalCanMaterials: row.portal_can_materials !== false,
+    portalCanShopping: row.portal_can_shopping !== false,
   };
 }

@@ -20,6 +20,18 @@ Execute também o arquivo **`supabase/migrations/20260321130000_adherence_versio
 
 Cria: `patient_adherence_logs`, `diet_plan_versions`, `patient_plan_ack` e respectivas políticas RLS.
 
+### Base de alimentos (macros + autocomplete)
+
+Execute **`supabase/migrations/20260322120000_foods_nutrition.sql`**.
+
+Cria a tabela `foods` (macros por 100 g), a função RPC `search_foods` para busca por nome e uma amostra de alimentos. O construtor de dieta usa essa RPC para o autocomplete.
+
+### Perfil do paciente + permissões de portal
+
+Execute **`supabase/migrations/20260322150000_patient_profile_portal.sql`** (após a migration MVP de `patients`).
+
+Adiciona: `phone`, `birth_date`, `sex`, `portal_access_active`, `portal_can_*` (diet, recipes, materials, shopping). Sem isso, o cadastro em etapas e a ficha avançada podem falhar ao salvar.
+
 ## 2. Variáveis de ambiente
 
 No `.env.local` (e no deploy), mantenha:

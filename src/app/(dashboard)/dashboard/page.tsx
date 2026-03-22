@@ -58,7 +58,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-10 md:space-y-12">
+    <div className="space-y-7 md:space-y-8">
       <PageHeader
         eyebrow="Resumo clínico"
         title="Visão geral"
@@ -86,7 +86,7 @@ export default function DashboardPage() {
           title="Publicados"
           value={String(publishedPlans)}
           trend={
-            <Chip tone="success" className="font-extrabold">
+            <Chip tone="success" className="font-semibold">
               {plans === 0 ? "—" : `${Math.round((publishedPlans / plans) * 100)}% da biblioteca`}
             </Chip>
           }
@@ -96,11 +96,11 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5 lg:items-stretch">
+      <div className="grid gap-4 lg:grid-cols-5 lg:items-stretch">
         <Card className="flex h-full flex-col border-dashed border-neutral-200/90 bg-bg-0/90 lg:col-span-3">
-          <CardHeader className="border-b border-neutral-100/90 pb-4">
+          <CardHeader className="border-b border-neutral-100/90 pb-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-h4Extra tracking-tight text-text-primary">Evolução e tendências</p>
+              <p className="text-title18 font-semibold tracking-tight text-text-primary">Evolução e tendências</p>
               <Chip tone="muted">API futura</Chip>
             </div>
             <p className="mt-2 max-w-2xl text-body14 leading-relaxed text-text-secondary">
@@ -108,7 +108,7 @@ export default function DashboardPage() {
               histórico — sem dados sintéticos no painel.
             </p>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-center py-10">
+          <CardContent className="flex flex-1 flex-col justify-center py-6">
             <EmptyState
               title="Sem série histórica ainda"
               description="Após conectar Supabase ou API, este bloco exibirá curvas reais de acompanhamento."
@@ -119,18 +119,18 @@ export default function DashboardPage() {
 
         <Card className="flex h-full flex-col lg:col-span-2">
           <CardHeader className="pb-2">
-            <p className="text-h4Extra tracking-tight text-text-primary">Indicadores operacionais</p>
+            <p className="text-title18 font-semibold tracking-tight text-text-primary">Indicadores operacionais</p>
             <p className="mt-1 text-body14 text-text-secondary">Check-ins, revisões e alertas — alimentados por integração.</p>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col space-y-4 pt-4">
-            <div className="rounded-2xl border border-neutral-100/90 bg-bg-0 p-4 shadow-inner ring-1 ring-black/[0.02]">
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">{snap.operational.labels.checkIns}</p>
-              <p className="mt-1 text-2xl font-black tabular-nums text-text-muted">—</p>
+            <div className="rounded-lg border border-neutral-100/90 bg-bg-0 p-3 shadow-inner ring-1 ring-black/[0.02]">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{snap.operational.labels.checkIns}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-text-muted">—</p>
               <p className="mt-0.5 text-small12 font-semibold text-text-muted">Aguardando fonte de dados</p>
             </div>
-            <div className="rounded-2xl border border-neutral-100/90 bg-bg-0 p-4 shadow-inner ring-1 ring-black/[0.02]">
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">{snap.operational.labels.plansOpened}</p>
-              <p className="mt-1 text-2xl font-black tabular-nums text-text-muted">—</p>
+            <div className="rounded-lg border border-neutral-100/90 bg-bg-0 p-3 shadow-inner ring-1 ring-black/[0.02]">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{snap.operational.labels.plansOpened}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-text-muted">—</p>
               <p className="mt-0.5 text-small12 font-semibold text-text-muted">Aguardando fonte de dados</p>
             </div>
             <div className="mt-auto flex flex-col gap-2">
@@ -145,11 +145,11 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
         <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div>
-              <p className="text-title16 font-extrabold text-text-primary">Atividade recente</p>
+              <p className="text-title16 font-semibold text-text-primary">Atividade recente</p>
               <p className="mt-0.5 text-small12 font-semibold text-text-muted">Eventos do seu workspace</p>
             </div>
             <Chip tone="primary">Ao vivo</Chip>
@@ -172,10 +172,10 @@ export default function DashboardPage() {
         <Card className="flex h-full flex-col">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div>
-              <p className="text-title16 font-extrabold text-text-primary">Planos recentes</p>
+              <p className="text-title16 font-semibold text-text-primary">Planos recentes</p>
               <p className="mt-0.5 text-small12 font-semibold text-text-muted">Últimos na biblioteca</p>
             </div>
-            <Link href="/diet-plans" className="text-[11px] font-extrabold text-primary underline-offset-4 hover:underline">
+            <Link href="/diet-plans" className="text-[11px] font-semibold text-primary underline-offset-4 hover:underline">
               Ver todos
             </Link>
           </CardHeader>
@@ -210,7 +210,7 @@ export default function DashboardPage() {
 
         <Card className="flex h-full flex-col">
           <CardHeader className="pb-2">
-            <p className="text-title16 font-extrabold text-text-primary">Pacientes recentes</p>
+            <p className="text-title16 font-semibold text-text-primary">Pacientes recentes</p>
             <p className="mt-0.5 text-small12 font-semibold text-text-muted">Acesso rápido</p>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col pt-2">
@@ -230,7 +230,7 @@ export default function DashboardPage() {
                       className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-bg-0 px-3 py-3 transition-all hover:border-primary/20 hover:bg-neutral-50/40"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-yellow/15 text-small12 font-extrabold text-text-primary ring-1 ring-primary/10">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-yellow/15 text-small12 font-semibold text-text-primary ring-1 ring-primary/10">
                           {initials(p.name)}
                         </span>
                         <div className="min-w-0">

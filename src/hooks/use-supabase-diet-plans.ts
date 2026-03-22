@@ -146,6 +146,13 @@ export function useSupabaseDietPlans() {
       const current = plans.find((p) => p.id === id);
       if (!current) return;
       const nextStatus = current.status === "published" ? "draft" : "published";
+      if (
+        nextStatus === "published" &&
+        current.planKind === "patient_plan" &&
+        !current.linkedPatientId
+      ) {
+        throw new Error("Selecione um paciente neste plano no editor antes de publicar.");
+      }
       const { error: upErr } = await supabase
         .from("diet_plans")
         .update({

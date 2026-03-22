@@ -3,61 +3,99 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { PageHeader } from "@/components/layout/dashboard/page-header";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
 import { patientDietSummary } from "@/lib/clinical/dashboard-snapshot";
-import type { PatientClinicalStatus } from "@/lib/draft-storage";
-import { getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
+import { getPublishedPlanForPatient, getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
 import { fetchAdherenceLogsForPatient, type AdherenceLogRow } from "@/lib/supabase/patient-adherence-db";
+import { cloneEntirePlan } from "@/lib/diet-plan-factory";
+import { formatPatientDateTime, weekStartIsoDate } from "@/lib/patients/patient-display";
+import { cn } from "@/lib/utils";
 
-const STATUS_LABEL: Record<PatientClinicalStatus, string> = {
-  active: "Ativo",
-  paused: "Pausado",
-  archived: "Arquivado",
-};
-
-function formatIso(iso: string | null | undefined) {
-  if (!iso) return "—";
-  try {
-    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+function maxIso(isos: (string | null | undefined)[]): string | null {
+  const valid = isos.filter((s): s is string => Boolean(s));
+  if (!valid.length) return null;
+  return valid.reduce((a, b) => (new Date(a) > new Date(b) ? a : b));
 }
 
-export default function PatientDetailPage() {
+function QuickCard({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={cn("border-neutral-200/50 shadow-premium-sm ring-1 ring-black/[0.03]", className)}>
+      <CardContent className="p-4 md:p-5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</p>
+        <div className="mt-2">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function PatientResumoPage() {
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
-  const { patients, updatePatient, loading: patientsLoading } = useSupabasePatients();
-  const { plans, loading: plansLoading } = useSupabaseDietPlans();
+  const { patients, loading: patientsLoading } = useSupabasePatients();
+  const { plans, loading: plansLoading, upsertPlan, refresh: refreshPlans } = useSupabaseDietPlans();
 
   const patient = patients.find((p) => p.id === patientId);
   const summary = patient ? patientDietSummary(patient, plans) : null;
+  const published = patient ? getPublishedPlanForPatient(patient.id, plans) : null;
   const linked = patient ? getPlansLinkedToPatient(patient.id, plans) : [];
 
-  const [notes, setNotes] = React.useState(patient?.clinicalNotes ?? "");
-  const [adherenceLogs, setAdherenceLogs] = React.useState<AdherenceLogRow[]>([]);
-
-  React.useEffect(() => {
-    setNotes(patient?.clinicalNotes ?? "");
-  }, [patient?.clinicalNotes, patient?.id]);
+  const [adherence, setAdherence] = React.useState<AdherenceLogRow[]>([]);
+  const [dupBusy, setDupBusy] = React.useState(false);
+  const [dupError, setDupError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!patient?.id) return;
-    let cancelled = false;
-    void fetchAdherenceLogsForPatient(patient.id, 50).then((rows) => {
-      if (!cancelled) setAdherenceLogs(rows);
+    let c = false;
+    void fetchAdherenceLogsForPatient(patient.id, 60).then((rows) => {
+      if (!c) setAdherence(rows);
     });
     return () => {
-      cancelled = true;
+      c = true;
     };
   }, [patient?.id]);
+
+  const weekStart = weekStartIsoDate();
+  const weekLogs = adherence.filter((l) => l.log_date >= weekStart);
+  const weekCompletedMeals = weekLogs.filter((l) => l.scope === "meal" && l.completed).length;
+  const lastAdherenceAt = adherence[0]?.updated_at ?? adherence[0]?.created_at ?? null;
+  const lastInteraction = maxIso([lastAdherenceAt, patient?.updatedAt, summary?.lastDietUpdateAt]);
+
+  const obsPending = !(patient?.clinicalNotes?.trim());
+
+  async function duplicatePublished() {
+    if (!published) return;
+    setDupError(null);
+    setDupBusy(true);
+    try {
+      const copy = cloneEntirePlan(published);
+      const withPatient = {
+        ...copy,
+        linkedPatientId: patientId,
+        patientHeaderLabel: patient?.name ?? copy.patientHeaderLabel,
+      };
+      await upsertPlan(withPatient);
+      await refreshPlans();
+      router.push(`/diet-plans/${withPatient.id}/edit`);
+    } catch (e) {
+      setDupError(e instanceof Error ? e.message : "Erro ao duplicar.");
+    } finally {
+      setDupBusy(false);
+    }
+  }
 
   if (!patientId) {
     return (
@@ -67,7 +105,7 @@ export default function PatientDetailPage() {
 
   if (patientsLoading || plansLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando ficha…</div>
+      <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando resumo…</div>
     );
   }
 
@@ -81,221 +119,166 @@ export default function PatientDetailPage() {
     );
   }
 
-  const status = patient.clinicalStatus ?? "active";
-  const revisions = summary?.publishedPlan?.revisionHistory?.slice(-5).reverse() ?? [];
+  const timelineItems: { title: string; subtitle: string; tone: "done" | "empty" }[] = [
+    {
+      title: "Paciente cadastrado",
+      subtitle: patient.createdAt ? formatPatientDateTime(patient.createdAt) : "Data não disponível",
+      tone: patient.createdAt ? "done" : "empty",
+    },
+    {
+      title: "Plano publicado",
+      subtitle: published?.publishedAt ? formatPatientDateTime(published.publishedAt) : "Nenhum plano publicado ainda",
+      tone: published?.publishedAt ? "done" : "empty",
+    },
+    {
+      title: "Plano atualizado (última revisão)",
+      subtitle: summary?.lastDietUpdateAt ? formatPatientDateTime(summary.lastDietUpdateAt) : "Sem revisões salvas",
+      tone: summary?.lastDietUpdateAt ? "done" : "empty",
+    },
+    {
+      title: "Última observação do paciente (dia)",
+      subtitle: adherence.find((l) => l.scope === "daily" && l.notes?.trim())?.updated_at
+        ? formatPatientDateTime(adherence.find((l) => l.scope === "daily" && l.notes?.trim())!.updated_at)
+        : "Sem observação diária registrada",
+      tone: adherence.some((l) => l.scope === "daily" && l.notes?.trim()) ? "done" : "empty",
+    },
+    {
+      title: "Última marcação de refeição",
+      subtitle: adherence.find((l) => l.scope === "meal")?.updated_at
+        ? formatPatientDateTime(adherence.find((l) => l.scope === "meal")!.updated_at)
+        : "Sem marcações ainda",
+      tone: adherence.some((l) => l.scope === "meal") ? "done" : "empty",
+    },
+  ];
 
   return (
     <div className="space-y-10">
-      <PageHeader
-        eyebrow="Paciente"
-        title={patient.name}
-        description="Visão clínica resumida — vinculação de plano, atualizações e observações internas."
-      />
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="border-b border-neutral-100/90 pb-4">
-            <p className="text-title16 font-extrabold text-text-primary">Identificação</p>
-          </CardHeader>
-          <CardContent className="grid gap-4 pt-5 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">ID interno</p>
-              <p className="mt-1 font-mono text-small12 font-bold text-text-primary">{patient.id}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">E-mail</p>
-              <p className="mt-1 font-semibold text-text-primary">{patient.email}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">Status</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Chip tone={status === "active" ? "success" : status === "paused" ? "yellow" : "muted"}>{STATUS_LABEL[status]}</Chip>
-                <select
-                  aria-label="Alterar status clínico"
-                  className="rounded-xl border border-neutral-200/80 bg-bg-0 px-3 py-2 text-small12 font-bold text-text-primary"
-                  value={status}
-                  onChange={(e) =>
-                    void updatePatient(patient.id, { clinicalStatus: e.target.value as PatientClinicalStatus })
-                  }
-                >
-                  <option value="active">Ativo</option>
-                  <option value="paused">Pausado</option>
-                  <option value="archived">Arquivado</option>
-                </select>
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-text-muted">Plano publicado</p>
-              <p className="mt-1 font-semibold text-text-primary">
-                {summary?.publishedPlan?.name ?? "Nenhum plano publicado vinculado"}
-              </p>
-              {summary?.lastDietUpdateAt ? (
-                <p className="mt-2 text-small12 text-text-secondary">
-                  Última revisão registrada: <span className="font-bold text-text-primary">{formatIso(summary.lastDietUpdateAt)}</span>
-                </p>
-              ) : (
-                <p className="mt-2 text-small12 text-text-muted">Sem histórico de revisão salvo ainda.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="border-b border-neutral-100/90 pb-4">
-            <p className="text-title16 font-extrabold text-text-primary">Ações</p>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 pt-5">
-            <Link href={`/patients/${patient.id}/diet`} className={buttonClassName("primary", "md", "w-full justify-center")}>
-              Ver cardápio (prévia)
-            </Link>
-            {summary?.publishedPlan ? (
-              <Link
-                href={`/diet-plans/${summary.publishedPlan.id}/edit`}
-                className={buttonClassName("outline", "md", "w-full justify-center")}
-              >
-                Editar plano vinculado
-              </Link>
-            ) : (
-              <Link href="/diet-plans/new" className={buttonClassName("outline", "md", "w-full justify-center")}>
-                Criar plano para o paciente
-              </Link>
-            )}
-            <Button type="button" variant="secondary" size="md" className="w-full" onClick={() => router.push("/patients")}>
-              Voltar ao diretório
-            </Button>
-          </CardContent>
-        </Card>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Resumo</p>
+        <h2 className="mt-1 text-title16 font-semibold text-text-primary md:text-h4 md:tracking-tight">Painel principal</h2>
+        <p className="mt-2 max-w-3xl text-small12 font-semibold leading-relaxed text-text-secondary">
+          Visão executiva do paciente: plano, adesão, portal e atalhos. Cada bloco pode crescer com novos indicadores sem mudar a navegação.
+        </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="border-b border-neutral-100/90 pb-4">
-            <p className="text-title16 font-extrabold text-text-primary">Histórico resumido</p>
-            <p className="mt-1 text-small12 text-text-secondary">Versões salvas do plano publicado (metadados)</p>
-          </CardHeader>
-          <CardContent className="pt-5">
-            {revisions.length === 0 ? (
-              <p className="text-body14 text-text-muted">Sem revisões armazenadas. Ao salvar no construtor, novas entradas aparecerão aqui.</p>
+      {dupError ? (
+        <p className="rounded-xl border border-orange/30 bg-orange/10 px-4 py-3 text-small12 font-bold text-text-secondary">{dupError}</p>
+      ) : null}
+
+      <section aria-label="Indicadores rápidos">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Indicadores rápidos</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <QuickCard label="Plano atual">
+            <p className="text-body14 font-semibold text-text-primary">{published?.name ?? "Sem plano publicado"}</p>
+            {linked.length > 1 ? (
+              <p className="mt-1 text-[11px] font-semibold text-text-muted">{linked.length} planos vinculados no total</p>
+            ) : null}
+          </QuickCard>
+          <QuickCard label="Status do plano">
+            {published ? (
+              <Chip tone="success" className="font-semibold">
+                Publicado
+              </Chip>
+            ) : linked.some((p) => p.status === "draft") ? (
+              <Chip tone="yellow" className="font-semibold">
+                Em rascunho
+              </Chip>
             ) : (
-              <ul className="space-y-3">
-                {revisions.map((r) => (
-                  <li key={r.id} className="rounded-xl border border-neutral-100/90 bg-neutral-50/50 px-3 py-3">
-                    <p className="font-bold text-text-primary">v{r.versionNumber} · {r.name}</p>
-                    <p className="mt-1 text-[11px] font-semibold text-text-muted">{formatIso(r.savedAt)}</p>
-                    {r.changedByLabel ? (
-                      <p className="mt-1 text-[11px] font-semibold text-text-secondary">Alterado por {r.changedByLabel}</p>
-                    ) : null}
-                    <Chip tone={r.status === "published" ? "success" : "yellow"} className="mt-2">
-                      {r.status === "published" ? "Publicado" : "Rascunho"}
-                    </Chip>
-                  </li>
-                ))}
-              </ul>
+              <span className="text-body14 font-semibold text-text-muted">Sem plano vinculado</span>
             )}
-          </CardContent>
-        </Card>
+          </QuickCard>
+          <QuickCard label="Acesso ao app">
+            <Chip tone={patient.portalAccessActive ? "success" : "muted"} className="font-semibold">
+              {patient.portalAccessActive ? "Liberado" : "Suspenso"}
+            </Chip>
+            <p className="mt-2 text-[11px] font-semibold text-text-muted">Permissões detalhadas no perfil</p>
+          </QuickCard>
+          <QuickCard label="Última interação">
+            <p className="text-body14 font-bold text-text-primary">{formatPatientDateTime(lastInteraction, "Sem registros")}</p>
+            <p className="mt-1 text-[11px] text-text-muted">Adesão, revisão do plano ou atualização da ficha</p>
+          </QuickCard>
+          <QuickCard label="Adesão na semana">
+            <p className="text-title16 font-semibold tabular-nums text-text-primary">{weekCompletedMeals}</p>
+            <p className="mt-1 text-[11px] font-semibold text-text-muted">Refeições marcadas como realizadas (esta semana)</p>
+            {weekLogs.length === 0 ? <p className="mt-2 text-[11px] italic text-text-muted">Sem linhas de log na semana</p> : null}
+          </QuickCard>
+          <QuickCard label="Observações clínicas" className={obsPending ? "ring-1 ring-amber-200/80" : ""}>
+            {obsPending ? (
+              <>
+                <Chip tone="yellow" className="font-semibold">
+                  Pendente
+                </Chip>
+                <p className="mt-2 text-[11px] font-semibold text-text-secondary">Inclua notas internas na aba Perfil</p>
+              </>
+            ) : (
+              <>
+                <Chip tone="success" className="font-semibold">
+                  Preenchidas
+                </Chip>
+                <p className="mt-2 line-clamp-2 text-[11px] font-medium text-text-secondary">{patient.clinicalNotes}</p>
+              </>
+            )}
+          </QuickCard>
+        </div>
+      </section>
 
-        <Card>
-          <CardHeader className="border-b border-neutral-100/90 pb-4">
-            <p className="text-title16 font-extrabold text-text-primary">Observações clínicas</p>
-            <p className="mt-1 text-small12 text-text-secondary">Visível apenas na área da nutricionista (até integração servidor)</p>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-5">
-            <div className="space-y-2">
-              <label htmlFor="clinical-notes" className="block text-small12 font-bold uppercase tracking-wide text-text-muted">
-                Notas
-              </label>
-              <textarea
-                id="clinical-notes"
-                rows={5}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anotações internas, alertas, preferências…"
-                className="w-full resize-y rounded-xl border border-neutral-200/90 bg-bg-0 px-4 py-3 text-sm text-text-primary shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-primary/30 focus:ring-2 focus:ring-primary/15"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              className="w-full"
-              onClick={() =>
-                void (async () => {
-                  try {
-                    await updatePatient(patient.id, { clinicalNotes: notes });
-                  } catch {
-                    /* noop */
-                  }
-                })()
-              }
-            >
-              Salvar observações
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <section aria-label="Ações rápidas">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ações rápidas</p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <Link href="/diet-plans/new" className={buttonClassName("primary", "md", "h-11 w-full justify-center rounded-xl")}>
+            Novo plano
+          </Link>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className="h-11 w-full rounded-xl font-bold"
+            disabled={!published || dupBusy}
+            onClick={() => void duplicatePublished()}
+          >
+            {dupBusy ? "Duplicando…" : "Duplicar plano publicado"}
+          </Button>
+          <Link href={`/patients/${patientId}/plano`} className={buttonClassName("secondary", "md", "h-11 w-full justify-center rounded-xl")}>
+            Publicar / gerir plano
+          </Link>
+          <Link href={`/patients/${patientId}/diario`} className={buttonClassName("outline", "md", "h-11 w-full justify-center rounded-xl")}>
+            Abrir diário
+          </Link>
+          <Link href={`/patients/${patientId}/materiais`} className={buttonClassName("outline", "md", "h-11 w-full justify-center rounded-xl")}>
+            Enviar material
+          </Link>
+          <Link href={`/patients/${patientId}/receitas`} className={buttonClassName("outline", "md", "h-11 w-full justify-center rounded-xl")}>
+            Liberar receita
+          </Link>
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader className="border-b border-neutral-100/90 pb-4">
-          <p className="text-title16 font-extrabold text-text-primary">Adesão e registros (Supabase)</p>
-          <p className="mt-1 text-small12 text-text-secondary">
-            Dados enviados pelo paciente em <span className="font-bold">/meu-plano</span> — refeições, dificuldade e observação do dia.
-          </p>
-        </CardHeader>
-        <CardContent className="pt-5">
-          {adherenceLogs.length === 0 ? (
-            <p className="text-body14 text-text-muted">Ainda não há registros de adesão para este paciente.</p>
-          ) : (
-            <ul className="max-h-64 space-y-2 overflow-y-auto text-small12">
-              {adherenceLogs.map((log) => (
-                <li
-                  key={log.id}
-                  className="rounded-xl border border-neutral-100/90 bg-neutral-50/40 px-3 py-2 font-semibold text-text-secondary"
-                >
-                  <span className="font-extrabold text-text-primary">
-                    {log.log_date} · {log.scope === "daily" ? "Dia" : `Refeição ${log.meal_id?.slice(0, 8)}…`}
-                  </span>
-                  {log.scope === "meal" ? (
-                    <span className="mt-1 block text-[11px]">
-                      {log.completed ? "Realizada" : "Pendente"} · Dificuldade: {log.difficulty}
-                    </span>
-                  ) : (
-                    <span className="mt-1 block text-[11px] text-text-muted">{log.notes || "—"}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b border-neutral-100/90 pb-4">
-          <p className="text-title16 font-extrabold text-text-primary">Planos vinculados ({linked.length})</p>
-        </CardHeader>
-        <CardContent className="pt-5">
-          {linked.length === 0 ? (
-            <p className="text-body14 text-text-muted">Nenhum plano com vínculo a este paciente.</p>
-          ) : (
+      <section aria-label="Linha do tempo">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Linha do tempo (resumo)</p>
+        <Card className="border-neutral-200/50 shadow-premium-sm">
+          <CardContent className="p-0">
             <ul className="divide-y divide-neutral-100/90">
-              {linked.map((pl) => (
-                <li key={pl.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              {timelineItems.map((item) => (
+                <li key={item.title} className="flex gap-4 px-4 py-4 md:px-5">
+                  <span
+                    className={cn(
+                      "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-offset-2 ring-offset-bg-0",
+                      item.tone === "done" ? "bg-secondary ring-secondary/30" : "bg-neutral-300 ring-neutral-200",
+                    )}
+                  />
                   <div>
-                    <p className="font-bold text-text-primary">{pl.name}</p>
-                    <p className="text-[11px] font-semibold text-text-muted">{pl.planKind === "patient_plan" ? "Plano do paciente" : "Modelo"}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Chip tone={pl.status === "published" ? "success" : "yellow"}>{pl.status === "published" ? "Publicado" : "Rascunho"}</Chip>
-                    <Link href={`/diet-plans/${pl.id}/edit`} className={buttonClassName("outline", "sm", "")}>
-                      Abrir
-                    </Link>
+                    <p className="text-sm font-semibold text-text-primary">{item.title}</p>
+                    <p className="mt-1 text-[11px] font-semibold leading-relaxed text-text-secondary">{item.subtitle}</p>
                   </div>
                 </li>
               ))}
             </ul>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <Link href={`/patients/${patientId}/historico`} className="mt-3 inline-flex text-small12 font-semibold text-primary hover:underline">
+          Ver histórico completo →
+        </Link>
+      </section>
     </div>
   );
 }

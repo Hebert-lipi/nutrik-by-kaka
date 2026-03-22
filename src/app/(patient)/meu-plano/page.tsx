@@ -140,7 +140,7 @@ export default function MeuPlanoPage() {
       <div className="space-y-6">
         <div className="text-center">
           <p className="text-small12 font-bold uppercase tracking-wide text-secondary">Olá, {patient.name.split(" ")[0]}</p>
-          <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-text-primary md:text-3xl">Seu plano ainda não foi publicado</h1>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-text-primary md:text-3xl">Seu plano ainda não foi publicado</h1>
           <p className="mx-auto mt-3 max-w-lg text-body14 text-text-secondary">
             Quando a nutricionista publicar o plano vinculado ao seu cadastro, ele aparecerá aqui.
           </p>
@@ -175,7 +175,7 @@ export default function MeuPlanoPage() {
       <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] px-4 py-4 text-center md:px-6">
         <p className="text-small12 font-bold uppercase tracking-wide text-secondary">Olá, {patient.name.split(" ")[0]}</p>
         <p className="mt-1 text-body14 text-text-secondary">Este é o seu plano alimentar atual. Em caso de dúvida, fale com sua nutricionista.</p>
-        <Chip tone="success" className="mt-3 font-extrabold">
+        <Chip tone="success" className="mt-3 font-semibold">
           Plano ativo
         </Chip>
       </div>

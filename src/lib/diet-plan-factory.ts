@@ -12,7 +12,7 @@ function deepCloneMeals(meals: DraftPlanMeal[]): DraftPlanMeal[] {
 /** Cópia profunda do plano com novos IDs (novo documento na biblioteca). */
 export function cloneEntirePlan(plan: DraftPlan): DraftPlan {
   const baseName = plan.name.trim();
-  const name = baseName ? `Cópia — ${baseName}`.slice(0, 160) : "Cópia — Plano sem nome";
+  const name = (baseName ? `Cópia de ${baseName}` : "Cópia de plano sem nome").slice(0, 160);
   const meals = deepCloneMeals(plan.meals).map((m) => ({
     ...m,
     id: crypto.randomUUID(),
@@ -28,7 +28,7 @@ export function cloneEntirePlan(plan: DraftPlan): DraftPlan {
     description: plan.description,
     status: "draft",
     patientCount: 0,
-    planKind: "template",
+    planKind: "patient_plan",
     linkedPatientId: null,
     professionalName: plan.professionalName,
     professionalRegistration: plan.professionalRegistration,

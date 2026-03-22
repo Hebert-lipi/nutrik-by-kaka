@@ -1,6 +1,9 @@
 /** Status clínico-operacional do paciente no diretório (não confundir com status do plano). */
 export type PatientClinicalStatus = "active" | "paused" | "archived";
 
+/** Sexo para ficha clínica (opcional). */
+export type PatientSex = "female" | "male" | "other" | "unspecified";
+
 export type DraftPatient = {
   id: string;
   name: string;
@@ -13,6 +16,17 @@ export type DraftPatient = {
   updatedAt?: string;
   /** ISO 8601 — criação no servidor (Supabase). */
   createdAt?: string;
+  /** Telefone / WhatsApp. */
+  phone?: string;
+  /** Data de nascimento (YYYY-MM-DD). */
+  birthDate?: string | null;
+  sex?: PatientSex | null;
+  /** Acesso ao app do paciente. */
+  portalAccessActive?: boolean;
+  portalCanDietPlan?: boolean;
+  portalCanRecipes?: boolean;
+  portalCanMaterials?: boolean;
+  portalCanShopping?: boolean;
 };
 
 /** Unidade principal da porção (quantidade + unidade). */
@@ -35,6 +49,13 @@ export type DraftPlanFoodOption = {
   recipe: string;
   /** URL da imagem (futuro: upload); vazio se não houver. */
   imageUrl: string;
+  /** Vínculo opcional com `public.foods` (base de alimentos). */
+  foodId?: string | null;
+  /** Snapshot dos macros do alimento na base, por 100 g (escala com porção). */
+  foodCaloriesPer100?: number;
+  foodProteinPer100?: number;
+  foodCarbsPer100?: number;
+  foodFatPer100?: number;
 };
 
 /** Grupo dentro da refeição (bebida, proteína, etc.) com várias opções equivalentes. */
@@ -98,6 +119,8 @@ export type DraftPlan = {
   revisionHistory: DraftPlanRevisionSnapshot[];
   /** Número monotônico da versão atual (incrementa a cada salvamento persistido). */
   currentVersionNumber: number;
+  /** Data/hora da última publicação no Supabase (só preenchido ao carregar da API). */
+  publishedAt?: string | null;
 };
 
 const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade", "porção"];
@@ -118,6 +141,7 @@ export function createEmptyFoodOption(): DraftPlanFoodOption {
     note: "",
     recipe: "",
     imageUrl: "",
+    foodId: null,
   };
 }
 
@@ -145,6 +169,13 @@ const PATIENTS_KEY = "nutrik.draft.patients.v1";
 const PLANS_KEY = "nutrik.draft.plans.v1";
 
 /** Normaliza paciente salvo (inclui registros legados sem novos campos). */
+function parseSex(raw: unknown): PatientSex | null | undefined {
+  if (raw === null || raw === undefined || raw === "") return raw === null ? null : undefined;
+  const s = String(raw);
+  if (s === "female" || s === "male" || s === "other" || s === "unspecified") return s;
+  return undefined;
+}
+
 export function normalizeDraftPatient(raw: unknown): DraftPatient {
   if (!raw || typeof raw !== "object") {
     return {
@@ -154,12 +185,21 @@ export function normalizeDraftPatient(raw: unknown): DraftPatient {
       planLabel: "—",
       clinicalStatus: "active",
       clinicalNotes: "",
+      phone: "",
+      birthDate: null,
+      sex: null,
+      portalAccessActive: true,
+      portalCanDietPlan: true,
+      portalCanRecipes: true,
+      portalCanMaterials: true,
+      portalCanShopping: true,
     };
   }
   const o = raw as Record<string, unknown>;
   const status = o.clinicalStatus ?? o.status;
   const clinicalStatus: PatientClinicalStatus =
     status === "paused" || status === "archived" || status === "active" ? status : "active";
+  const sex = parseSex(o.sex);
   return {
     id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
     name: typeof o.name === "string" ? o.name : "",
@@ -168,6 +208,14 @@ export function normalizeDraftPatient(raw: unknown): DraftPatient {
     clinicalStatus,
     clinicalNotes: typeof o.clinicalNotes === "string" ? o.clinicalNotes : "",
     updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
+    phone: typeof o.phone === "string" ? o.phone : "",
+    birthDate: typeof o.birthDate === "string" ? o.birthDate : null,
+    sex: sex === undefined ? null : sex,
+    portalAccessActive: typeof o.portalAccessActive === "boolean" ? o.portalAccessActive : true,
+    portalCanDietPlan: typeof o.portalCanDietPlan === "boolean" ? o.portalCanDietPlan : true,
+    portalCanRecipes: typeof o.portalCanRecipes === "boolean" ? o.portalCanRecipes : true,
+    portalCanMaterials: typeof o.portalCanMaterials === "boolean" ? o.portalCanMaterials : true,
+    portalCanShopping: typeof o.portalCanShopping === "boolean" ? o.portalCanShopping : true,
   };
 }
 
@@ -186,7 +234,16 @@ function legacyItemToOption(raw: unknown): DraftPlanFoodOption {
   const o = raw as Record<string, unknown>;
   const qty = Number(o.quantity);
   const unitStr = typeof o.unit === "string" ? o.unit : "g";
-  return {
+  const foodIdRaw = o.foodId;
+  const foodId =
+    typeof foodIdRaw === "string" && foodIdRaw.trim() ? foodIdRaw.trim() : foodIdRaw === null ? null : undefined;
+
+  const numOrUndef = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const opt: DraftPlanFoodOption = {
     id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
     name: typeof o.name === "string" ? o.name : "",
     quantity: Number.isFinite(qty) ? qty : 0,
@@ -198,6 +255,18 @@ function legacyItemToOption(raw: unknown): DraftPlanFoodOption {
     recipe: typeof o.recipe === "string" ? o.recipe : "",
     imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : "",
   };
+
+  if (foodId !== undefined) opt.foodId = foodId;
+  const c = numOrUndef(o.foodCaloriesPer100);
+  const p = numOrUndef(o.foodProteinPer100);
+  const cb = numOrUndef(o.foodCarbsPer100);
+  const f = numOrUndef(o.foodFatPer100);
+  if (c !== undefined) opt.foodCaloriesPer100 = c;
+  if (p !== undefined) opt.foodProteinPer100 = p;
+  if (cb !== undefined) opt.foodCarbsPer100 = cb;
+  if (f !== undefined) opt.foodFatPer100 = f;
+
+  return opt;
 }
 
 function normalizeFoodOption(raw: unknown): DraftPlanFoodOption {
@@ -331,6 +400,9 @@ export function normalizePlan(raw: unknown): DraftPlan {
     meals: meals.length ? meals : [createEmptyMeal("Café da manhã", 0)],
     revisionHistory: revisions.slice(-20),
     currentVersionNumber: Number.isFinite(cv) ? Math.max(1, Math.floor(cv)) : 1,
+    ...(typeof o.publishedAt === "string" || o.publishedAt === null
+      ? { publishedAt: o.publishedAt === null ? null : (o.publishedAt as string) }
+      : {}),
   };
 }
 

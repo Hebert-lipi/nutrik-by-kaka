@@ -23,7 +23,7 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-small12 font-extrabold text-text-primary">{item.title}</p>
+              <p className="text-small12 font-semibold text-text-primary">{item.title}</p>
               {item.subtitle ? (
                 <p className="mt-0.5 truncate text-[11px] font-semibold text-text-secondary">{item.subtitle}</p>
               ) : null}

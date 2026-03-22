@@ -52,22 +52,22 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         aria-modal="true"
         aria-labelledby="nutrik-modal-title"
         className={cn(
-          "max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-neutral-200/70 bg-bg-0 shadow-[0_24px_64px_-12px_rgba(15,23,42,0.16)]",
+          "max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-xl border border-neutral-200/70 bg-bg-0 shadow-[0_16px_48px_-12px_rgba(15,23,42,0.1)]",
           variant === "planPreview" && "nutrik-plan-preview-dialog",
           className,
         )}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-neutral-100 px-6 py-5">
-          <h2 id="nutrik-modal-title" className="text-title18 font-extrabold text-text-primary">
+        <div className="border-b border-neutral-100 px-4 py-3.5">
+          <h2 id="nutrik-modal-title" className="text-title16 font-semibold text-text-primary">
             {title}
           </h2>
           {description ? (
-            <p className="mt-1.5 text-body14 leading-relaxed text-text-secondary">{description}</p>
+            <p className="mt-1 text-body14 leading-relaxed text-text-secondary">{description}</p>
           ) : null}
         </div>
-        <div className="px-6 py-5">{children}</div>
-        {footer ? <div className="border-t border-neutral-100 px-6 py-4">{footer}</div> : null}
+        <div className="px-4 py-4">{children}</div>
+        {footer ? <div className="border-t border-neutral-100 px-4 py-3">{footer}</div> : null}
       </div>
     </div>,
     document.body,

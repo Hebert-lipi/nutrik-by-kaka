@@ -15,7 +15,7 @@ export function NutrikLogoMark({ className }: { className?: string }) {
           <path d="M12 8v10M9 12h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.35" />
         </svg>
       </span>
-      <span className="text-lg font-extrabold tracking-tight text-secondary sm:text-xl">Nutrik by Kaká</span>
+      <span className="text-lg font-semibold tracking-tight text-secondary sm:text-xl">Nutrik by Kaká</span>
     </div>
   );
 }

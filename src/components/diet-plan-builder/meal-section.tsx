@@ -8,6 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
 import { cn } from "@/lib/utils";
+import { FoodAutocomplete } from "./food-autocomplete";
+import type { FoodRow } from "@/lib/supabase/foods";
+import { computeOptionNutrition, sumMealNutrition } from "@/lib/nutrition/food-math";
+
+function mergeOptionPatch(o: DraftPlanFoodOption, patch: Partial<DraftPlanFoodOption>): DraftPlanFoodOption {
+  if (patch.foodId === null) {
+    const next: Record<string, unknown> = { ...o, ...patch };
+    delete next.foodCaloriesPer100;
+    delete next.foodProteinPer100;
+    delete next.foodCarbsPer100;
+    delete next.foodFatPer100;
+    next.foodId = null;
+    return next as DraftPlanFoodOption;
+  }
+  return { ...o, ...patch };
+}
 
 const selectClass =
   "h-11 w-full rounded-xl border border-neutral-200/90 bg-bg-0 px-3 text-sm font-semibold text-text-primary shadow-sm outline-none transition-all focus:border-primary/30 focus:ring-2 focus:ring-primary/15";
@@ -29,20 +45,38 @@ function OptionEditor({
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = React.useState(Boolean(option.recipe.trim() || option.imageUrl.trim()));
+  const lineNut = computeOptionNutrition(option);
+
+  const applyFood = (f: FoodRow) => {
+    const qty = option.quantity <= 0;
+    onChange({
+      name: f.name,
+      foodId: f.id,
+      foodCaloriesPer100: f.calories,
+      foodProteinPer100: f.protein,
+      foodCarbsPer100: f.carbs,
+      foodFatPer100: f.fat,
+      quantity: qty ? 100 : option.quantity,
+      unit: qty ? "g" : option.unit,
+    });
+  };
 
   return (
-    <div className="rounded-xl border border-neutral-200/70 bg-bg-0 p-4 shadow-inner ring-1 ring-black/[0.02]">
+    <div className="rounded-xl border border-neutral-200/60 bg-gradient-to-br from-bg-0 via-bg-0 to-neutral-50/30 p-4 shadow-inner ring-1 ring-black/[0.03]">
       <div className="grid gap-3 lg:grid-cols-12 lg:items-end">
-        <div className="lg:col-span-3">
-          <Input
+        <div className="lg:col-span-4">
+          <FoodAutocomplete
+            id={`food-ac-${option.id}`}
             label="Alimento / opção"
-            placeholder="Ex.: Filé de frango"
             value={option.name}
-            onChange={(e) => onChange({ name: e.target.value })}
-            className="space-y-1.5"
+            onValueChange={(name) => onChange({ name })}
+            foodLinked={Boolean(option.foodId)}
+            onClearFood={() => onChange({ foodId: null })}
+            onSelectFood={applyFood}
+            className="space-y-1"
           />
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:col-span-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:col-span-4">
           <div className="space-y-1.5">
             <label className="block text-small12 font-bold uppercase tracking-wide text-text-muted">Qtd.</label>
             <input
@@ -111,11 +145,33 @@ function OptionEditor({
           />
         </div>
         <div className="flex justify-end lg:col-span-1 lg:items-end">
-          <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={onRemove}>
+          <Button type="button" variant="ghost" size="sm" className="font-semibold text-orange" onClick={onRemove}>
             Remover
           </Button>
         </div>
       </div>
+      {lineNut ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-secondary/20 bg-secondary/[0.06] px-3 py-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-secondary">Porção estimada</span>
+          <Chip tone="primary" className="font-bold">
+            {Math.round(lineNut.kcal)} kcal
+          </Chip>
+          <Chip tone="muted" className="font-semibold">
+            P {lineNut.protein}g
+          </Chip>
+          <Chip tone="muted" className="font-semibold">
+            C {lineNut.carbs}g
+          </Chip>
+          <Chip tone="muted" className="font-semibold">
+            G {lineNut.fat}g
+          </Chip>
+        </div>
+      ) : option.foodId ? (
+        <p className="mt-3 rounded-lg border border-amber-200/60 bg-amber-50/80 px-3 py-2 text-[11px] font-semibold text-text-secondary">
+          Informe quantidade em <span className="font-semibold">g</span> ou <span className="font-semibold">ml</span>, ou preencha o campo{" "}
+          <span className="font-semibold">g</span> em unidade/porção, para calcular os macros.
+        </p>
+      ) : null}
       <div className="mt-3">
         <Input
           label="Observação (opcional)"
@@ -127,7 +183,7 @@ function OptionEditor({
       </div>
       <button
         type="button"
-        className="mt-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-primary hover:underline"
+        className="mt-3 text-left text-[11px] font-semibold uppercase tracking-wide text-primary hover:underline"
         onClick={() => setExpanded((x) => !x)}
       >
         {expanded ? "Ocultar receita e imagem" : "+ Receita / preparo e imagem"}
@@ -182,7 +238,7 @@ function GroupBlock({
   onChangeOption: (optionId: string, patch: Partial<DraftPlanFoodOption>) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-neutral-200/60 bg-gradient-to-b from-neutral-50/40 to-bg-0 p-4 ring-1 ring-black/[0.02]">
+    <div className="rounded-2xl border border-neutral-200/55 bg-gradient-to-b from-neutral-50/50 to-bg-0 p-4 shadow-inner ring-1 ring-black/[0.03]">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <label className="sr-only" htmlFor={`group-name-${group.id}`}>
@@ -190,7 +246,7 @@ function GroupBlock({
           </label>
           <input
             id={`group-name-${group.id}`}
-            className="h-10 w-full max-w-xs rounded-xl border border-neutral-200/90 bg-bg-0 px-3 text-sm font-extrabold text-text-primary outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/15"
+            className="h-10 w-full max-w-xs rounded-xl border border-neutral-200/90 bg-bg-0 px-3 text-sm font-semibold text-text-primary outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/15"
             value={group.name}
             onChange={(e) => onChangeGroup({ name: e.target.value })}
             placeholder="Ex.: Proteína"
@@ -201,7 +257,7 @@ function GroupBlock({
           <Button type="button" variant="primary" size="sm" onClick={onAddOption}>
             + Opção
           </Button>
-          <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={onRemoveGroup}>
+          <Button type="button" variant="ghost" size="sm" className="font-semibold text-orange" onClick={onRemoveGroup}>
             Remover grupo
           </Button>
         </div>
@@ -265,7 +321,7 @@ export function MealSection({
           ? g
           : {
               ...g,
-              options: g.options.map((o) => (o.id === optionId ? { ...o, ...patch } : o)),
+              options: g.options.map((o) => (o.id === optionId ? mergeOptionPatch(o, patch) : o)),
             },
       ),
     });
@@ -296,15 +352,19 @@ export function MealSection({
     });
   };
 
+  const mealTotals = sumMealNutrition(meal);
+  const mealHasNutrition =
+    mealTotals.kcal > 0 || mealTotals.protein > 0 || mealTotals.carbs > 0 || mealTotals.fat > 0;
+
   return (
     <Card
       className={cn(
-        "overflow-hidden border-neutral-200/55 transition-[opacity,box-shadow] duration-200",
+        "overflow-hidden border-neutral-200/50 shadow-premium ring-1 ring-black/[0.04] transition-[opacity,box-shadow] duration-200",
         dropHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-bg-1",
         isDragging && "opacity-55",
       )}
     >
-      <CardHeader className="border-b border-neutral-100/90 bg-gradient-to-r from-primary/[0.06] via-bg-0 to-yellow/[0.04] pb-4">
+      <CardHeader className="border-b border-neutral-100/90 bg-gradient-to-r from-primary/[0.08] via-bg-0 to-yellow/[0.06] pb-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start">
             {drag ? (
@@ -316,12 +376,12 @@ export function MealSection({
                 title="Arrastar para reordenar"
                 aria-label="Arrastar para reordenar refeição"
               >
-                <span className="pointer-events-none text-sm font-black leading-none tracking-tighter text-text-muted" aria-hidden>
+                <span className="pointer-events-none text-sm font-semibold leading-none tracking-tighter text-text-muted" aria-hidden>
                   ::
                 </span>
               </div>
             ) : null}
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-small12 font-black text-primary ring-1 ring-primary/20">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-small12 font-semibold text-primary ring-1 ring-primary/20">
               {index + 1}
             </span>
             <div className="min-w-0 flex-1 space-y-4">
@@ -355,6 +415,25 @@ export function MealSection({
                   onChange={(e) => patchMeal({ observation: e.target.value })}
                 />
               </div>
+              {mealHasNutrition ? (
+                <div className="flex flex-col gap-2 rounded-2xl border border-secondary/20 bg-bg-0/80 p-3 ring-1 ring-secondary/10 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-secondary">Total da refeição</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip tone="primary" className="font-semibold">
+                      {Math.round(mealTotals.kcal)} kcal
+                    </Chip>
+                    <Chip tone="muted" className="font-bold">
+                      P {mealTotals.protein}g
+                    </Chip>
+                    <Chip tone="muted" className="font-bold">
+                      C {mealTotals.carbs}g
+                    </Chip>
+                    <Chip tone="muted" className="font-bold">
+                      G {mealTotals.fat}g
+                    </Chip>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-2 xl:justify-end">
@@ -367,17 +446,19 @@ export function MealSection({
             <Button type="button" variant="secondary" size="sm" onClick={onDuplicateMeal}>
               Duplicar refeição
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={onRemoveMeal}>
+            <Button type="button" variant="ghost" size="sm" className="font-semibold text-orange" onClick={onRemoveMeal}>
               Remover refeição
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-6">
+      <CardContent className="space-y-4 bg-gradient-to-b from-bg-0 to-neutral-50/20 pt-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
-            <p className="text-title14 font-extrabold text-text-primary">Grupos de alimentos</p>
-            <p className="mt-1 text-small12 font-semibold text-text-secondary">Ex.: bebida, proteína, carboidrato — com várias opções em cada.</p>
+            <p className="text-title14 font-semibold text-text-primary">Grupos de alimentos</p>
+            <p className="mt-1 text-small12 font-semibold text-text-secondary">
+              Ex.: bebida, proteína, carboidrato — com várias opções em cada. Totais somam todas as linhas (ajuste se forem alternativas exclusivas).
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="muted">{meal.groups.length} grupo(s)</Chip>

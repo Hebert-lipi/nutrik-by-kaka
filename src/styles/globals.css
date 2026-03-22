@@ -30,10 +30,10 @@
   --color-bg-1: 247 244 239;
   --color-bg-2: 241 237 231;
 
-  /* Text hierarchy */
-  --color-text-primary: 15 23 42;
-  --color-text-secondary: 51 65 85;
-  --color-text-muted: 107 114 128;
+  /* Text hierarchy — contraste suave (menos “preto puro”) */
+  --color-text-primary: 30 41 59;
+  --color-text-secondary: 71 85 105;
+  --color-text-muted: 100 116 139;
 
   /* Focus ring */
   --color-ring: 165 200 75;
@@ -47,12 +47,117 @@ body {
 body {
   background: rgb(var(--color-bg-1));
   color: rgb(var(--color-text-primary));
+  font-size: 0.8125rem; /* 13px — densidade tipo painel clínico */
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/*
+ * Sidebar: shell só branco. Ilustração fica na faixa flex .nutrik-sidebar-wellness
+ * (entre menu compacto e rodapé), para o texto não sobrepor a arte.
+ */
+.nutrik-sidebar-shell {
+  background-color: #ffffff;
+}
+
+/*
+ * Ilustração inferior: integrada ao sidebar — sem “caixa” (sem drop-shadow forte).
+ * ::before = overlay branco→transparente (liga ao menu); ::after = PNG com mask fade nas bordas.
+ */
+.nutrik-sidebar-wellness {
+  flex: 1 1 0;
+  min-height: 48px;
+  min-width: 0;
+  position: relative;
+  isolation: isolate;
+  background-color: #ffffff;
+  background-image: linear-gradient(
+    to bottom,
+    #ffffff 0%,
+    rgba(255, 255, 255, 0.65) 28%,
+    rgba(255, 255, 255, 0.12) 58%,
+    rgba(255, 255, 255, 0) 78%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.nutrik-sidebar-wellness::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    rgba(255, 255, 255, 0.92) 8%,
+    rgba(255, 255, 255, 0.45) 26%,
+    rgba(255, 255, 255, 0) 48%
+  );
+}
+
+/*
+ * Ancorada em bottom-right; bottom negativo desce a arte (mais perto do “Sair”) sem aumentar o asset.
+ */
+.nutrik-sidebar-wellness::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: auto;
+  bottom: -58px;
+  width: 198%;
+  max-width: none;
+  height: min(404px, 100%);
+  background-image: url("/images/sidebar-wellness-bg.png");
+  background-repeat: no-repeat;
+  background-position: bottom right;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.98;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 88%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 2%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 88%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 2%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  filter: saturate(1.02);
+}
+
+.nutrik-sidebar-shell--drawer .nutrik-sidebar-wellness {
+  flex: 1 1 auto;
+  min-height: 64px;
+}
+
+.nutrik-sidebar-shell--drawer .nutrik-sidebar-wellness::after {
+  bottom: -44px;
+  width: 168%;
+  height: min(312px, 94%);
+  background-position: bottom right;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 7%, #000 86%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 3%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 7%, #000 86%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 3%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+/* Logo sidebar: cabeçalho discreto — alinhada à hierarquia dos itens do menu */
+.sidebar-brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 128px;
+  height: auto;
+  max-height: 44px;
+  object-fit: contain;
+  object-position: left top;
+  background: transparent !important;
 }
 
 /* Impressão a partir da pré-visualização do plano (Construtor) */
@@ -88,4 +193,3 @@ body {
     background: white !important;
   }
 }
-

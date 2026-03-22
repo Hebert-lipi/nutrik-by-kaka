@@ -12,6 +12,9 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         primary: {
           DEFAULT: "rgb(var(--color-primary))",
@@ -48,35 +51,37 @@ const config: Config = {
         ring: "rgb(var(--color-ring))",
       },
       borderRadius: {
-        sm: "10px",
-        md: "14px",
-        lg: "16px",
-        xl: "22px",
+        /** SaaS compacto (~6–10px), estilo painel clínico */
+        sm: "6px",
+        md: "8px",
+        lg: "10px",
+        xl: "12px",
       },
       boxShadow: {
-        card: "0 12px 40px rgba(15, 23, 42, 0.07)",
-        soft: "0 8px 24px rgba(15, 23, 42, 0.06)",
-        lift: "0 2px 8px rgba(15, 23, 42, 0.04)",
+        card: "0 2px 12px rgba(15, 23, 42, 0.045)",
+        soft: "0 4px 14px rgba(15, 23, 42, 0.04)",
+        lift: "0 1px 3px rgba(15, 23, 42, 0.035)",
         premium:
-          "0 1px 0 rgba(15, 23, 42, 0.04), 0 4px 6px -2px rgba(15, 23, 42, 0.04), 0 22px 56px -18px rgba(15, 23, 42, 0.14)",
-        "premium-sm": "0 1px 0 rgba(15, 23, 42, 0.05), 0 12px 32px -14px rgba(15, 23, 42, 0.1)",
+          "0 1px 0 rgba(15, 23, 42, 0.025), 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px -10px rgba(15, 23, 42, 0.07)",
+        "premium-sm":
+          "0 1px 0 rgba(15, 23, 42, 0.03), 0 4px 12px -6px rgba(15, 23, 42, 0.05)",
       },
       fontSize: {
-        h1: ["2rem", { lineHeight: "2.25rem", fontWeight: "600" }], // 32px
-        h1Bold: ["2rem", { lineHeight: "2.25rem", fontWeight: "700" }],
-        h2: ["1.75rem", { lineHeight: "2.125rem", fontWeight: "700" }], // 28px
-        h3: ["1.625rem", { lineHeight: "2rem", fontWeight: "700" }], // 26px
-        h4: ["1.5rem", { lineHeight: "1.875rem", fontWeight: "700" }], // 24px
-        h4Extra: ["1.5rem", { lineHeight: "1.875rem", fontWeight: "800" }],
-        h5: ["1.375rem", { lineHeight: "1.75rem", fontWeight: "700" }], // 22px
-        title18: ["1.125rem", { lineHeight: "1.5rem", fontWeight: "600" }], // 18px
-        title16: ["1rem", { lineHeight: "1.5rem", fontWeight: "600" }], // 16px
-        title14: ["0.875rem", { lineHeight: "1.25rem", fontWeight: "600" }], // 14px
-        body16: ["1rem", { lineHeight: "1.5rem", fontWeight: "400" }],
-        body16Semi: ["1rem", { lineHeight: "1.5rem", fontWeight: "600" }],
-        body14: ["0.875rem", { lineHeight: "1.25rem", fontWeight: "400" }],
-        body14Semi: ["0.875rem", { lineHeight: "1.25rem", fontWeight: "600" }],
-        small12: ["0.75rem", { lineHeight: "1rem", fontWeight: "400" }],
+        h1: ["1.5rem", { lineHeight: "1.875rem", fontWeight: "600" }], // 24px — título de página grande
+        h1Bold: ["1.5rem", { lineHeight: "1.875rem", fontWeight: "700" }],
+        h2: ["1.375rem", { lineHeight: "1.625rem", fontWeight: "600" }], // 22px
+        h3: ["1.25rem", { lineHeight: "1.5rem", fontWeight: "600" }], // 20px
+        h4: ["1.125rem", { lineHeight: "1.5rem", fontWeight: "600" }], // 18px — título de card
+        h4Extra: ["1.125rem", { lineHeight: "1.5rem", fontWeight: "600" }],
+        h5: ["1.0625rem", { lineHeight: "1.375rem", fontWeight: "600" }], // 17px
+        title18: ["1.125rem", { lineHeight: "1.5rem", fontWeight: "600" }],
+        title16: ["1rem", { lineHeight: "1.375rem", fontWeight: "600" }],
+        title14: ["0.875rem", { lineHeight: "1.25rem", fontWeight: "500" }],
+        body16: ["0.9375rem", { lineHeight: "1.45rem", fontWeight: "400" }], // 15px
+        body16Semi: ["0.9375rem", { lineHeight: "1.45rem", fontWeight: "600" }],
+        body14: ["0.8125rem", { lineHeight: "1.3rem", fontWeight: "400" }], // 13px — corpo denso
+        body14Semi: ["0.8125rem", { lineHeight: "1.3rem", fontWeight: "600" }],
+        small12: ["0.75rem", { lineHeight: "1rem", fontWeight: "400" }], // 12px — labels
       },
       ringColor: {
         DEFAULT: "rgb(var(--color-ring))",

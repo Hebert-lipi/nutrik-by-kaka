@@ -8,10 +8,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableHead, TableCell, TableRow } from "@/components/ui/table";
 import { Chip } from "@/components/ui/chip";
 import { Modal } from "@/components/ui/modal";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { useSupabasePatients } from "@/hooks/use-supabase-patients";
-import { IconUsers } from "@/components/layout/dashboard/icons";
+import { useSupabasePatients, type NewPatientWizardInput } from "@/hooks/use-supabase-patients";
+import { PatientAddWizardModal } from "@/components/patients/patient-add-wizard-modal";
 
 function emailDomain(email: string) {
   const at = email.indexOf("@");
@@ -23,36 +22,8 @@ export default function PatientsPage() {
   const { patients, addPatient, removePatient, loading, error } = useSupabasePatients();
   const [addOpen, setAddOpen] = React.useState(false);
   const [removeId, setRemoveId] = React.useState<string | null>(null);
-  const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [formError, setFormError] = React.useState<string | null>(null);
-  const [saving, setSaving] = React.useState(false);
-
-  function resetForm() {
-    setName("");
-    setEmail("");
-    setFormError(null);
-  }
-
-  async function submitAdd(e: React.FormEvent) {
-    e.preventDefault();
-    const n = name.trim();
-    const em = email.trim();
-    if (!n || !em || !em.includes("@")) {
-      setFormError("Informe nome completo e um e-mail válido.");
-      return;
-    }
-    setSaving(true);
-    setFormError(null);
-    try {
-      await addPatient({ name: n, email: em });
-      resetForm();
-      setAddOpen(false);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Não foi possível salvar.");
-    } finally {
-      setSaving(false);
-    }
+  async function submitWizard(input: NewPatientWizardInput) {
+    await addPatient(input);
   }
 
   async function confirmRemove() {
@@ -66,7 +37,7 @@ export default function PatientsPage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6 md:space-y-7">
       <PageHeader
         eyebrow="Cadastro"
         title="Pacientes"
@@ -84,12 +55,12 @@ export default function PatientsPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 ring-1 ring-primary/20">
-                <span className="text-xl font-black text-primary" aria-hidden>
+                <span className="text-xl font-semibold text-primary" aria-hidden>
                   +
                 </span>
               </div>
               <div>
-                <p className="text-h4 font-extrabold tracking-tight text-text-primary">Lista de pacientes</p>
+                <p className="text-h4 font-semibold tracking-tight text-text-primary">Lista de pacientes</p>
                 <p className="mt-1 max-w-2xl text-body14 leading-relaxed text-text-secondary">
                   Cadastre, filtre e mantenha o histórico organizado. Use o botão principal para incluir novos registros.
                 </p>
@@ -99,8 +70,8 @@ export default function PatientsPage() {
             <Button
               type="button"
               variant="primary"
-              size="lg"
-              className="h-12 shrink-0 rounded-full px-8 font-bold"
+              size="md"
+              className="shrink-0 px-5"
               onClick={() => setAddOpen(true)}
             >
               Novo paciente
@@ -120,7 +91,7 @@ export default function PatientsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <TableCell colSpan={4} className="border-0 p-8 text-center text-body14 font-semibold text-text-muted">
+                    <TableCell colSpan={4} className="border-0 p-5 text-center text-body14 font-medium text-text-muted">
                       Carregando pacientes…
                     </TableCell>
                   </tr>
@@ -139,7 +110,7 @@ export default function PatientsPage() {
                     <TableRow key={p.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-small12 font-bold text-text-secondary ring-1 ring-neutral-200/60 transition-colors group-hover/row:bg-primary/10 group-hover/row:text-primary group-hover/row:ring-primary/15">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100 text-[11px] font-semibold text-text-secondary ring-1 ring-neutral-200/60 transition-colors group-hover/row:bg-primary/10 group-hover/row:text-primary group-hover/row:ring-primary/15">
                             {p.name
                               .split(/\s+/)
                               .slice(0, 2)
@@ -154,9 +125,14 @@ export default function PatientsPage() {
                             >
                               {p.name}
                             </Link>
-                            <Chip tone="muted" className="mt-1.5 max-w-[12rem]">
-                              Ver ficha
-                            </Chip>
+                            <Link
+                              href={`/patients/${p.id}`}
+                              className="mt-1.5 inline-flex max-w-[12rem] rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2"
+                            >
+                              <Chip tone="muted" className="max-w-full cursor-pointer transition-opacity hover:opacity-85">
+                                Ver ficha
+                              </Chip>
+                            </Link>
                           </div>
                         </div>
                       </TableCell>
@@ -172,7 +148,7 @@ export default function PatientsPage() {
                         <Chip tone={p.planLabel === "—" ? "muted" : "primary"}>{p.planLabel}</Chip>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button type="button" variant="ghost" size="sm" className="font-extrabold text-orange" onClick={() => setRemoveId(p.id)}>
+                        <Button type="button" variant="ghost" size="sm" className="font-semibold text-orange" onClick={() => setRemoveId(p.id)}>
                           Remover
                         </Button>
                       </TableCell>
@@ -185,51 +161,7 @@ export default function PatientsPage() {
         </CardContent>
       </Card>
 
-      <Modal
-        open={addOpen}
-        onClose={() => {
-          setAddOpen(false);
-          resetForm();
-        }}
-        title="Novo paciente"
-        description="Preencha os dados básicos. Você pode associar um plano alimentar agora ou depois."
-        footer={
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => {
-                setAddOpen(false);
-                resetForm();
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" form="add-patient-form" variant="primary" className="rounded-xl" disabled={saving}>
-              {saving ? "Salvando…" : "Salvar paciente"}
-            </Button>
-          </div>
-        }
-      >
-        <form id="add-patient-form" className="space-y-4" onSubmit={submitAdd}>
-          {formError ? (
-            <p className="rounded-xl border border-orange/30 bg-orange/10 px-3 py-2 text-small12 font-semibold text-text-secondary">
-              {formError}
-            </p>
-          ) : null}
-          <Input label="Nome completo" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required />
-          <Input
-            label="E-mail"
-            type="email"
-            inputMode="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            required
-          />
-        </form>
-      </Modal>
+      <PatientAddWizardModal open={addOpen} onClose={() => setAddOpen(false)} onSubmit={submitWizard} />
 
       <Modal
         open={removeId !== null}
@@ -238,10 +170,10 @@ export default function PatientsPage() {
         description="Esta ação remove o paciente e os planos vinculados a ele no Supabase (cascade)."
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRemoveId(null)}>
+            <Button type="button" variant="outline" onClick={() => setRemoveId(null)}>
               Cancelar
             </Button>
-            <Button type="button" variant="danger" className="rounded-xl" onClick={confirmRemove}>
+            <Button type="button" variant="danger" onClick={confirmRemove}>
               Confirmar remoção
             </Button>
           </div>

@@ -10,7 +10,7 @@ import { Topbar } from "./topbar";
 const routeTitle: Record<string, string> = {
   "/dashboard": "Painel",
   "/patients": "Pacientes",
-  "/diet-plans": "Planos alimentares",
+  "/diet-plans": "Biblioteca de planos",
 };
 
 /**
@@ -19,8 +19,7 @@ const routeTitle: Record<string, string> = {
  */
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isPatientDietRoute = /\/patients\/[^/]+\/diet$/.test(pathname);
-  const isPatientDetailRoute = /^\/patients\/[^/]+$/.test(pathname);
+  const isPatientWorkspaceRoute = /^\/patients\/[^/]+/.test(pathname) && pathname !== "/patients";
   const isPlanBuilderRoute = pathname.includes("/diet-plans/new") || /\/diet-plans\/[^/]+\/edit$/.test(pathname);
 
   let finalTitle = "Nutrik by Kaká";
@@ -32,13 +31,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (isPlanBuilderRoute) finalTitle = "Construtor de plano";
-  else if (isPatientDietRoute) finalTitle = "Pré-visualização do plano";
-  else if (isPatientDetailRoute) finalTitle = "Ficha do paciente";
+  else if (isPatientWorkspaceRoute) finalTitle = "Área do paciente";
 
   const compactTopbarTitle = pathname === "/dashboard";
 
   return (
-    <div className="box-border flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-bg-1 md:flex-row md:gap-5 md:p-5">
+    <div className="box-border flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-bg-1 md:flex-row md:gap-4 md:p-4">
       <Sidebar currentPath={pathname} />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -46,8 +44,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
           <div
             className={cn(
-              "mx-auto w-full max-w-6xl px-4 pt-5 md:px-6 md:pt-6",
-              isPlanBuilderRoute ? "pb-6 md:pb-8" : "pb-10 md:pb-12",
+              "mx-auto w-full max-w-6xl px-3 pt-4 md:px-5 md:pt-5",
+              isPlanBuilderRoute ? "pb-5 md:pb-6" : "pb-8 md:pb-9",
             )}
           >
             <NutritionistBootstrap>{children}</NutritionistBootstrap>

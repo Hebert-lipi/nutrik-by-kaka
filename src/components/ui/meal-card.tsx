@@ -55,11 +55,11 @@ export function MealCard({
 
   if (layout === "featured") {
     return (
-      <article className={cn("rounded-xl border border-neutral-200 bg-bg-0 shadow-soft", className)}>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row">
+      <article className={cn("rounded-lg border border-neutral-200 bg-bg-0 shadow-soft", className)}>
+        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:p-4">
           <div
             className={cn(
-              "relative h-[180px] w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 sm:h-[160px] sm:w-[240px] sm:flex-shrink-0",
+              "relative h-[160px] w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 sm:h-[148px] sm:w-[220px] sm:flex-shrink-0",
               classNameImage ?? "",
             )}
           >
@@ -81,7 +81,7 @@ export function MealCard({
                   ) : null}
                 </div>
 
-                <h2 className="mt-2 line-clamp-2 text-body16Semi font-extrabold text-text-primary">{title}</h2>
+                <h2 className="mt-2 line-clamp-2 text-body16Semi font-semibold text-text-primary">{title}</h2>
 
                 {meta?.ratingText ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-small12 text-text-secondary">
@@ -133,9 +133,9 @@ export function MealCard({
   }
 
   return (
-    <article className={cn("rounded-xl border border-neutral-200 bg-bg-0 shadow-soft", className)}>
-      <div className="flex gap-3 p-3">
-        <div className="relative h-[72px] w-[96px] flex-shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100">
+    <article className={cn("rounded-lg border border-neutral-200 bg-bg-0 shadow-soft", className)}>
+      <div className="flex gap-2.5 p-2.5">
+        <div className="relative h-[68px] w-[88px] flex-shrink-0 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
           <div className="absolute inset-0 bg-gradient-to-br from-neutral-100 to-neutral-50" />
           {imageSlot ? <div className="absolute inset-0 flex items-center justify-center">{imageSlot}</div> : null}
         </div>
@@ -143,7 +143,7 @@ export function MealCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-body14 font-extrabold text-text-primary line-clamp-2">{title}</h3>
+              <h3 className="text-body14 font-semibold text-text-primary line-clamp-2">{title}</h3>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {categoryLabel ? <Pill tone={categoryTone}>{categoryLabel}</Pill> : null}
                 {difficultyLabel ? <Pill tone="neutral">{difficultyLabel}</Pill> : null}

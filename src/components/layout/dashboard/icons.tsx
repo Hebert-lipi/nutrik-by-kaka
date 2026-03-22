@@ -97,6 +97,30 @@ export function IconDietPlan({ className }: { className?: string }) {
   );
 }
 
+/** Porta + seta (logout), alinhado a referências tipo pill “Sair”. */
+export function IconLogout({ className }: { className?: string }) {
+  return (
+    <IconBase className={className}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+        <path
+          d="M7.25 3.5h-2a1.75 1.75 0 0 0-1.75 1.75v7.5a1.75 1.75 0 0 0 1.75 1.75h2"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.25 6.25L14.5 9l-3.25 2.75M6.75 9h7.5"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </IconBase>
+  );
+}
+
 export function IconMenu({ className }: { className?: string }) {
   return (
     <IconBase className={className}>

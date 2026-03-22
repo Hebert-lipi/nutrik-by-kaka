@@ -10,26 +10,26 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const buttonBaseClass =
-  "inline-flex items-center justify-center gap-2 font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[rgb(var(--color-ring))] focus-visible:ring-offset-bg-1 disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[rgb(var(--color-ring))] focus-visible:ring-offset-bg-1 disabled:opacity-50 disabled:pointer-events-none";
 
 const base = buttonBaseClass;
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "rounded-full bg-gradient-to-b from-primary to-[rgb(175_205_85)] text-primary-foreground shadow-[0_1px_0_rgba(255,255,255,0.35)_inset,0_10px_28px_-6px_rgba(130,150,50,0.55)] ring-1 ring-black/5 hover:brightness-[1.03] active:scale-[0.98] active:brightness-[0.98]",
+    "rounded-md bg-gradient-to-b from-primary to-[rgb(175_205_85)] text-primary-foreground shadow-[0_1px_0_rgba(255,255,255,0.28)_inset,0_4px_12px_-4px_rgba(130,150,50,0.4)] ring-1 ring-black/[0.04] hover:brightness-[1.02] active:brightness-[0.98]",
   secondary:
-    "rounded-full bg-secondary text-secondary-foreground shadow-[0_2px_10px_-2px_rgba(34,110,72,0.35)] ring-1 ring-black/5 hover:opacity-95 active:scale-[0.99]",
-  ghost: "rounded-xl bg-transparent text-text-secondary hover:bg-neutral-100/90",
+    "rounded-md bg-secondary text-secondary-foreground shadow-[0_1px_2px_rgba(34,110,72,0.12)] ring-1 ring-black/[0.04] hover:opacity-95",
+  ghost: "rounded-md bg-transparent text-text-secondary hover:bg-neutral-100/90",
   outline:
-    "rounded-full border-2 border-neutral-200/95 bg-bg-0/80 text-text-secondary shadow-sm hover:border-neutral-300 hover:bg-neutral-50 active:scale-[0.99]",
+    "rounded-md border border-neutral-200/95 bg-bg-0/90 text-text-secondary shadow-sm hover:border-neutral-300 hover:bg-neutral-50/90",
   danger:
-    "rounded-full bg-gradient-to-b from-orange to-orange/90 text-white shadow-[0_8px_24px_-6px_rgba(255,120,60,0.45)] ring-1 ring-black/5 hover:brightness-105 active:scale-[0.98]",
+    "rounded-md bg-gradient-to-b from-orange to-orange/90 text-white shadow-[0_4px_14px_-4px_rgba(255,120,60,0.35)] ring-1 ring-black/[0.04] hover:brightness-[1.02] active:brightness-[0.98]",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: "h-9 px-3.5 text-xs",
-  md: "h-11 min-h-[2.75rem] px-5 text-sm",
-  lg: "h-12 min-h-[3rem] px-7 text-sm md:text-base",
+  sm: "h-8 min-h-[2rem] px-3 text-xs",
+  md: "h-9 min-h-[2.25rem] px-3.5",
+  lg: "h-10 min-h-[2.5rem] px-4 text-sm",
 };
 
 /** Para `<Link>` com a mesma hierarquia visual dos botões. */

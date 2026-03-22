@@ -25,6 +25,7 @@ import { PlanMetaSection } from "./plan-meta-section";
 import { MealSection } from "./meal-section";
 import { PlanPreviewModal } from "./plan-preview-modal";
 import { PlanBuilderContextStrip } from "./plan-builder-context-strip";
+import { PlanNutritionSummary } from "./plan-nutrition-summary";
 import { fetchPlanVersions, type DietPlanVersionRow } from "@/lib/supabase/plan-versions";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
@@ -55,6 +56,11 @@ function trimPlanForPersistence(plan: DraftPlan): DraftPlan {
           quantity: Number.isFinite(o.quantity) ? o.quantity : 0,
           grams: Math.max(0, o.grams || 0),
           ml: Math.max(0, o.ml || 0),
+          foodId: o.foodId ?? null,
+          foodCaloriesPer100: o.foodCaloriesPer100,
+          foodProteinPer100: o.foodProteinPer100,
+          foodCarbsPer100: o.foodCarbsPer100,
+          foodFatPer100: o.foodFatPer100,
         })),
       })),
     })),
@@ -171,14 +177,15 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       setSaveError("Informe o nome do plano para salvar.");
       return;
     }
-    if (plan.planKind === "patient_plan" && !plan.linkedPatientId) {
-      setSaveError("Selecione um paciente ou altere o tipo para “Plano modelo”.");
+    const nextStatus = statusOverride ?? plan.status;
+    if (plan.planKind === "patient_plan" && !plan.linkedPatientId && nextStatus === "published") {
+      setSaveError("Selecione um paciente antes de publicar.");
       return;
     }
 
     const trimmed = trimPlanForPersistence({
       ...plan,
-      status: statusOverride ?? plan.status,
+      status: nextStatus,
       patientCount:
         plan.planKind === "patient_plan" && plan.linkedPatientId ? 1 : Math.max(0, Math.floor(plan.patientCount || 0)),
     });
@@ -223,6 +230,10 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     );
   }
 
+  const needsPatient =
+    plan.planKind === "patient_plan" && !plan.linkedPatientId;
+  const publishBlocked = needsPatient;
+
   if (notFound) {
     return (
       <div className="space-y-6">
@@ -260,6 +271,52 @@ export function DietPlanBuilder({ mode, planId }: Props) {
           </Button>
         </div>
       </div>
+
+      {needsPatient ? (
+        <div
+          role="status"
+          className="rounded-2xl border-2 border-amber-400/50 bg-amber-50/90 px-4 py-4 shadow-sm md:px-5"
+        >
+          <p className="text-body14 font-semibold text-text-primary">Selecione um paciente para este plano</p>
+          <p className="mt-1 text-small12 font-semibold text-text-secondary">
+            Escolha o paciente abaixo para vincular no Supabase (por exemplo após duplicar um plano). Você pode trocar o paciente a qualquer momento.
+          </p>
+          <label htmlFor="nutrik-top-patient-select" className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+            Paciente (obrigatório para publicar)
+          </label>
+          <select
+            id="nutrik-top-patient-select"
+            className="mt-1.5 h-11 w-full max-w-xl rounded-xl border border-neutral-200/90 bg-bg-0 px-4 text-sm font-semibold text-text-primary shadow-sm outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/15"
+            value={plan.linkedPatientId ?? ""}
+            onChange={(e) => {
+              const id = e.target.value;
+              updatePlan((p) => ({
+                ...p,
+                linkedPatientId: id === "" ? null : id,
+                patientCount: id ? 1 : 0,
+                status: id === "" && p.status === "published" ? "draft" : p.status,
+                patientHeaderLabel: id && !p.patientHeaderLabel.trim()
+                  ? patients.find((x) => x.id === id)?.name ?? p.patientHeaderLabel
+                  : p.patientHeaderLabel,
+              }));
+            }}
+          >
+            <option value="">Selecione um paciente…</option>
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.email}
+              </option>
+            ))}
+          </select>
+          {patients.length === 0 ? (
+            <p className="mt-2 text-[11px] font-bold text-orange">
+              Nenhum paciente cadastrado. Cadastre em <Link href="/patients" className="underline">Pacientes</Link> primeiro.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <PlanNutritionSummary plan={plan} />
 
       <PlanBuilderContextStrip
         plan={plan}
@@ -306,7 +363,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       {mode === "edit" ? (
         <Card className="border-neutral-200/55">
           <CardHeader className="border-b border-neutral-100/90 pb-3">
-            <p className="text-title16 font-extrabold text-text-primary">Histórico de versões (Supabase)</p>
+            <p className="text-title16 font-semibold text-text-primary">Histórico de versões (Supabase)</p>
             <p className="mt-1 text-small12 font-semibold text-text-secondary">
               Cada “Salvar” ou “Publicar” gera uma linha em <span className="font-mono">diet_plan_versions</span> — o plano atual continua editável.
             </p>
@@ -327,7 +384,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
                       key={row.id}
                       className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-neutral-100/90 bg-neutral-50/50 px-3 py-2"
                     >
-                      <span className="font-extrabold text-text-primary">Snapshot</span>
+                      <span className="font-semibold text-text-primary">Snapshot</span>
                       <span className="font-semibold text-text-muted">
                         {new Date(row.created_at).toLocaleString("pt-BR", {
                           dateStyle: "short",
@@ -349,7 +406,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
                     key={rev.id}
                     className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-neutral-100/90 bg-neutral-50/50 px-3 py-2"
                   >
-                    <span className="font-extrabold text-text-primary">v{rev.versionNumber}</span>
+                    <span className="font-semibold text-text-primary">v{rev.versionNumber}</span>
                     <span className="font-semibold text-text-muted">
                       {new Date(rev.savedAt).toLocaleString("pt-BR", {
                         dateStyle: "short",
@@ -452,7 +509,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
 
       <Card className="border-neutral-200/55 bg-gradient-to-br from-neutral-50/30 to-bg-0 shadow-none">
         <CardContent className="flex flex-col gap-2 py-5 text-center sm:text-left">
-          <p className="text-title16 font-extrabold text-text-primary">Pronto para liberar ao paciente?</p>
+          <p className="text-title16 font-semibold text-text-primary">Pronto para liberar ao paciente?</p>
           <p className="text-small12 leading-relaxed text-text-secondary">
             Use <span className="font-bold text-text-primary">Publicar</span> quando a dieta estiver finalizada. Rascunhos ficam só na sua área; o portal do paciente mostra apenas a última versão publicada vinculada a ele.
           </p>
@@ -471,7 +528,14 @@ export function DietPlanBuilder({ mode, planId }: Props) {
             <Button type="button" variant="secondary" size="md" onClick={() => void persist()}>
               Salvar plano
             </Button>
-            <Button type="button" variant="primary" size="md" onClick={() => void persist("published")}>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={publishBlocked}
+              title={publishBlocked ? "Selecione um paciente para publicar." : undefined}
+              onClick={() => void persist("published")}
+            >
               Publicar plano
             </Button>
           </div>
