@@ -202,6 +202,10 @@ export function PlanPdfDocument({
         </section>
       ) : null}
 
+      {flags.showRecipes && recipes.length > 0 && flags.showShopping ? (
+        <div className="pdf-hard-page-break html2pdf__page-break" aria-hidden />
+      ) : null}
+
       {flags.showRecipes && recipes.length > 0 ? (
         <section className="pdf-block-shell pdf-block-recipes pdf-section-recipes relative z-10 mt-2 px-5 py-3.5">
           <h2 className="pdf-heading pdf-keep-with-next pdf-section-title text-[21px] font-black tracking-[0.01em] text-[#0b1322]">Receitas</h2>
@@ -210,6 +214,16 @@ export function PlanPdfDocument({
               <article key={`${r.title}-${i}`} className="pdf-recipe-block pdf-avoid-break border-t border-[#e8edf2] pt-2">
                 <p className="text-[17px] font-bold leading-tight text-[#111827]">{r.title}</p>
                 <p className="mt-1 text-[12px] text-[#64748b]">Refeição: {r.sourceMealName}</p>
+                {r.imageUrl ? (
+                  <div className="mt-2.5">
+                    <img
+                      src={r.imageUrl}
+                      alt={`Imagem da receita ${r.title}`}
+                      className="max-h-[180px] w-auto max-w-full rounded-lg border border-[#e5e7eb] object-contain"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                ) : null}
                 <div className="mt-2.5 grid gap-4 md:grid-cols-2">
                   <section>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#64748b]">Ingredientes</p>

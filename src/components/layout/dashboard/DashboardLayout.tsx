@@ -35,6 +35,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const compactTopbarTitle = pathname === "/dashboard";
 
+  React.useEffect(() => {
+    document.body.classList.add("nutrik-dashboard-shell");
+    document.documentElement.classList.add("nutrik-dashboard-shell-root");
+    return () => {
+      document.body.classList.remove("nutrik-dashboard-shell");
+      document.documentElement.classList.remove("nutrik-dashboard-shell-root");
+    };
+  }, []);
+
   return (
     <div className="box-border flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-bg-1 md:flex-row md:gap-4 md:p-4">
       <Sidebar currentPath={pathname} />

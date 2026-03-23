@@ -9,6 +9,13 @@ import { Chip } from "@/components/ui/chip";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { cn } from "@/lib/utils";
 
+const MATERIALS_CATALOG = [
+  { id: "meal-prep-basico", title: "Guia de meal prep da semana", type: "PDF", goal: "Rotina" },
+  { id: "hidratação-clinica", title: "Checklist de hidratação", type: "PDF", goal: "Adesão" },
+  { id: "lista-substituicoes", title: "Tabela prática de substituições", type: "PDF", goal: "Flexibilidade" },
+  { id: "proteinas-porcoes", title: "Proteínas e porções visuais", type: "Imagem", goal: "Composição corporal" },
+];
+
 export default function PatientMateriaisPage() {
   const params = useParams();
   const router = useRouter();
@@ -16,6 +23,35 @@ export default function PatientMateriaisPage() {
   const { patients, loading } = useSupabasePatients();
   const patient = patients.find((p) => p.id === patientId);
   const [mode, setMode] = React.useState<"all" | "curated">("curated");
+  const [assigned, setAssigned] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (!patientId || typeof window === "undefined") return;
+    const key = `nutrik:materials:${patientId}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      setAssigned([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as string[];
+      setAssigned(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setAssigned([]);
+    }
+  }, [patientId]);
+
+  function persist(next: string[]) {
+    setAssigned(next);
+    if (typeof window !== "undefined" && patientId) {
+      window.localStorage.setItem(`nutrik:materials:${patientId}`, JSON.stringify(next));
+    }
+  }
+
+  function toggleAssign(id: string) {
+    if (assigned.includes(id)) persist(assigned.filter((x) => x !== id));
+    else persist([...assigned, id]);
+  }
 
   if (!patientId) {
     return <EmptyState title="ID inválido" action={{ label: "Voltar", onClick: () => router.push("/patients") }} />;
@@ -42,7 +78,7 @@ export default function PatientMateriaisPage() {
           variant="primary"
           size="md"
           className="h-11 rounded-full px-6 font-semibold"
-          onClick={() => alert("Configuração de materiais — em breve: picker de PDFs/vídeos e políticas de acesso.")}
+          onClick={() => setMode("all")}
         >
           Configurar materiais
         </Button>
@@ -78,10 +114,27 @@ export default function PatientMateriaisPage() {
               <p className="text-title16 font-semibold text-text-primary">Materiais disponíveis</p>
               <Chip tone="muted">Biblioteca</Chip>
             </div>
-            <p className="mt-1 text-small12 text-text-secondary">Catálogo geral (placeholder)</p>
+            <p className="mt-1 text-small12 text-text-secondary">Catálogo geral da clínica</p>
           </CardHeader>
-          <CardContent className="py-10 text-center text-small12 font-semibold text-text-muted">
-            {mode === "all" ? "Em breve: grade com busca e filtros." : "Alterne para “Todos” para simular o catálogo completo."}
+          <CardContent className="space-y-2 py-4">
+            {(mode === "all" ? MATERIALS_CATALOG : MATERIALS_CATALOG.filter((m) => assigned.includes(m.id))).map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200/70 bg-neutral-50/40 px-3 py-2">
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">{m.title}</p>
+                  <p className="text-[11px] text-text-muted">{m.type} · {m.goal}</p>
+                </div>
+                <button
+                  type="button"
+                  className={buttonClassName(assigned.includes(m.id) ? "outline" : "secondary", "sm", "rounded-lg")}
+                  onClick={() => toggleAssign(m.id)}
+                >
+                  {assigned.includes(m.id) ? "Remover" : "Liberar"}
+                </button>
+              </div>
+            ))}
+            {mode === "curated" && assigned.length === 0 ? (
+              <p className="py-6 text-center text-small12 font-semibold text-text-muted">Nenhum material liberado ainda.</p>
+            ) : null}
           </CardContent>
         </Card>
         <Card className="border-primary/15 shadow-premium-sm ring-1 ring-primary/10">
@@ -92,16 +145,29 @@ export default function PatientMateriaisPage() {
             </div>
             <p className="mt-1 text-small12 text-text-secondary">Somente o que você autorizar</p>
           </CardHeader>
-          <CardContent className="py-10 text-center">
-            <p className="text-body14 font-semibold text-text-muted">Nenhum material liberado</p>
-            <p className="mx-auto mt-2 max-w-xs text-small12 text-text-muted">Use “Configurar materiais” quando o backend estiver pronto.</p>
-            <button
-              type="button"
-              className={buttonClassName("outline", "sm", "mt-4 rounded-xl font-bold")}
-              onClick={() => setMode("all")}
-            >
-              Ver catálogo (preview)
-            </button>
+          <CardContent className="py-4">
+            {assigned.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-body14 font-semibold text-text-muted">Nenhum material liberado</p>
+                <p className="mx-auto mt-2 max-w-xs text-small12 text-text-muted">Selecione materiais no catálogo à esquerda.</p>
+                <button
+                  type="button"
+                  className={buttonClassName("outline", "sm", "mt-4 rounded-xl font-bold")}
+                  onClick={() => setMode("all")}
+                >
+                  Ver catálogo
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {MATERIALS_CATALOG.filter((m) => assigned.includes(m.id)).map((m) => (
+                  <div key={`assigned-${m.id}`} className="rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2">
+                    <p className="text-sm font-semibold text-text-primary">{m.title}</p>
+                    <p className="text-[11px] text-text-secondary">{m.type} · {m.goal}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -23,6 +23,7 @@ export type PlanPdfRecipe = {
   sourceMealName: string;
   ingredients: string[];
   preparation: string;
+  imageUrl?: string | null;
 };
 
 export function sectionFlagsForVariant(variant: PlanPdfVariant): PlanPdfSectionFlags {
@@ -102,6 +103,7 @@ export function buildRecipesFromPlan(plan: DraftPlan): PlanPdfRecipe[] {
           sourceMealName: meal.name || "Refeição",
           ingredients: [`${title} — ${qtyLabel(opt)}`],
           preparation: prep,
+          imageUrl: opt.imageUrl?.trim() || null,
         });
       }
     }

@@ -53,6 +53,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Evita rolagem dupla no shell do dashboard:
+ * o scroll deve acontecer apenas no <main> do layout.
+ */
+html.nutrik-dashboard-shell-root,
+body.nutrik-dashboard-shell {
+  overflow: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -315,6 +323,17 @@ body {
   .pdf-section-recipes {
     break-before: auto;
     page-break-before: auto;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .pdf-hard-page-break {
+    break-before: page !important;
+    page-break-before: always !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
   }
 
   .pdf-footer {
