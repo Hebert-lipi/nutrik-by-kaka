@@ -24,6 +24,12 @@ import type { NutritionActivityLevel, NutritionGoal, PatientSex } from "@/lib/dr
 import type { UpsertPatientAssessmentInput } from "@/lib/supabase/patient-assessments";
 import { getPublishedPlanForPatient } from "@/lib/clinical/patient-plan";
 import { formatPatientDateTime } from "@/lib/patients/patient-display";
+import {
+  COMPARISON_GROUPS,
+  formatComparisonValue,
+  getNumericComparisonValue,
+  type AssessmentComparisonMetric,
+} from "@/lib/clinical/assessment-comparison";
 
 type NumFields =
   | "weight_kg"
@@ -131,6 +137,8 @@ export default function PatientAvaliacoesPage() {
   const [saving, setSaving] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [viewMode, setViewMode] = React.useState<"history" | "comparison">("history");
+  const [comparisonIds, setComparisonIds] = React.useState<string[]>([]);
   const [sectionsOpen, setSectionsOpen] = React.useState({
     basic: true,
     circumferences: false,
@@ -301,6 +309,54 @@ export default function PatientAvaliacoesPage() {
     .filter(Boolean) as Array<{ date: string; value: number }>;
   const chartFat = [...items].reverse().filter((x) => x.body_fat_pct != null);
   const chartLean = [...items].reverse().filter((x) => x.lean_mass_kg != null);
+  const comparisonRows = items.filter((x) => comparisonIds.includes(x.id));
+
+  function toggleComparisonRow(id: string) {
+    setComparisonIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
+  }
+
+  function resetComparisonSelection() {
+    setComparisonIds(items.slice(0, 2).map((x) => x.id));
+  }
+
+  function deltaLabel(metric: AssessmentComparisonMetric, currentIdx: number): string {
+    if (currentIdx === 0) return "—";
+    const row = comparisonRows[currentIdx];
+    const prev = comparisonRows[currentIdx - 1];
+    if (!row || !prev) return "—";
+    const current = getNumericComparisonValue(metric, row);
+    const previous = getNumericComparisonValue(metric, prev);
+    if (current == null || previous == null) return "—";
+    const delta = current - previous;
+    const signal = delta > 0 ? "+" : "";
+    const suffix = metric.deltaUnit ?? metric.unit ?? "";
+    return `${signal}${delta.toFixed(2)}${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  function deltaTone(metric: AssessmentComparisonMetric, currentIdx: number): string {
+    if (currentIdx === 0) return "text-text-muted";
+    const row = comparisonRows[currentIdx];
+    const prev = comparisonRows[currentIdx - 1];
+    if (!row || !prev) return "text-text-muted";
+    const current = getNumericComparisonValue(metric, row);
+    const previous = getNumericComparisonValue(metric, prev);
+    if (current == null || previous == null) return "text-text-muted";
+    const delta = current - previous;
+    if (delta < 0) return "text-secondary";
+    if (delta > 0) return "text-orange";
+    return "text-text-muted";
+  }
+
+  React.useEffect(() => {
+    if (items.length < 2) return;
+    setComparisonIds((prev) => {
+      if (prev.length > 0) return prev.filter((id) => items.some((x) => x.id === id));
+      return items.slice(0, 2).map((x) => x.id);
+    });
+  }, [items]);
 
   return (
     <div className="space-y-8">
@@ -315,6 +371,23 @@ export default function PatientAvaliacoesPage() {
         <Button type="button" variant="primary" onClick={startNew}>
           Nova avaliação
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={buttonClassName(viewMode === "history" ? "secondary" : "outline", "sm", "rounded-lg")}
+          onClick={() => setViewMode("history")}
+        >
+          Histórico e evolução
+        </button>
+        <button
+          type="button"
+          className={buttonClassName(viewMode === "comparison" ? "secondary" : "outline", "sm", "rounded-lg")}
+          onClick={() => setViewMode("comparison")}
+        >
+          Comparação de avaliações
+        </button>
       </div>
 
       {error || actionError ? (
@@ -478,70 +551,153 @@ export default function PatientAvaliacoesPage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-neutral-200/55">
-          <CardHeader><p className="text-title16 font-semibold text-text-primary">Gráficos de evolução</p></CardHeader>
-          <CardContent className="space-y-5">
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Peso</p>
-              {chartWeight.length > 1 ? (
-                <MiniLineChart values={chartWeight.map((x) => Number(x.weight_kg))} labels={chartWeight.map((x) => x.assessment_date.slice(5))} />
-              ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de peso.</p>}
-            </div>
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">IMC</p>
-              {chartBmi.length > 1 ? (
-                <MiniLineChart values={chartBmi.map((x) => x.value)} labels={chartBmi.map((x) => x.date)} />
-              ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de IMC.</p>}
-            </div>
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">% gordura</p>
-              {chartFat.length > 1 ? (
-                <MiniLineChart values={chartFat.map((x) => Number(x.body_fat_pct))} labels={chartFat.map((x) => x.assessment_date.slice(5))} />
-              ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de gordura.</p>}
-            </div>
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Massa magra</p>
-              {chartLean.length > 1 ? (
-                <MiniLineChart values={chartLean.map((x) => Number(x.lean_mass_kg))} labels={chartLean.map((x) => x.assessment_date.slice(5))} />
-              ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de massa magra.</p>}
-            </div>
-          </CardContent>
-        </Card>
+      {viewMode === "history" ? (
+        <>
+          <section className="grid gap-4 lg:grid-cols-2">
+            <Card className="border-neutral-200/55">
+              <CardHeader><p className="text-title16 font-semibold text-text-primary">Gráficos de evolução</p></CardHeader>
+              <CardContent className="space-y-5">
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Peso</p>
+                  {chartWeight.length > 1 ? (
+                    <MiniLineChart values={chartWeight.map((x) => Number(x.weight_kg))} labels={chartWeight.map((x) => x.assessment_date.slice(5))} />
+                  ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de peso.</p>}
+                </div>
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">IMC</p>
+                  {chartBmi.length > 1 ? (
+                    <MiniLineChart values={chartBmi.map((x) => x.value)} labels={chartBmi.map((x) => x.date)} />
+                  ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de IMC.</p>}
+                </div>
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">% gordura</p>
+                  {chartFat.length > 1 ? (
+                    <MiniLineChart values={chartFat.map((x) => Number(x.body_fat_pct))} labels={chartFat.map((x) => x.assessment_date.slice(5))} />
+                  ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de gordura.</p>}
+                </div>
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Massa magra</p>
+                  {chartLean.length > 1 ? (
+                    <MiniLineChart values={chartLean.map((x) => Number(x.lean_mass_kg))} labels={chartLean.map((x) => x.assessment_date.slice(5))} />
+                  ) : <p className="text-small12 text-text-muted">Sem dados suficientes para gráfico de massa magra.</p>}
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-neutral-200/55">
+            <Card className="border-neutral-200/55">
+              <CardHeader className="border-b border-neutral-100/90 pb-3">
+                <p className="text-title16 font-semibold text-text-primary">Histórico de avaliações</p>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loading ? (
+                  <p className="p-5 text-small12 font-semibold text-text-muted">Carregando avaliações...</p>
+                ) : items.length === 0 ? (
+                  <div className="p-5"><EmptyState title="Sem avaliações" description="Crie a primeira avaliação para iniciar a evolução clínica." action={{ label: "Nova avaliação", onClick: startNew }} /></div>
+                ) : (
+                  <ul className="divide-y divide-neutral-100/90">
+                    {items.map((row) => (
+                      <li key={row.id} className="px-4 py-3 md:px-5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <button type="button" className="text-left" onClick={() => setSelectedId(row.id)}>
+                            <p className="text-body14 font-semibold text-text-primary">{row.assessment_date}</p>
+                            <p className="text-small12 text-text-secondary">{row.weight_kg != null ? `${row.weight_kg} kg` : "sem peso"} · {row.body_fat_pct != null ? `${row.body_fat_pct}% gordura` : "sem % gordura"}</p>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            {selected?.id === row.id ? <Chip tone="primary">Selecionada</Chip> : null}
+                            <Button type="button" variant="outline" size="sm" onClick={() => editRow(row.id)}>Editar</Button>
+                            <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => void deleteCurrent(row.id)}>Excluir</Button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        </>
+      ) : (
+        <Card className="border-primary/20 shadow-premium-sm">
           <CardHeader className="border-b border-neutral-100/90 pb-3">
-            <p className="text-title16 font-semibold text-text-primary">Histórico de avaliações</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-title16 font-semibold text-text-primary">Comparação de avaliações</p>
+                <p className="mt-1 text-small12 text-text-secondary">Selecione 2 ou mais avaliações para comparar lado a lado.</p>
+              </div>
+              <button type="button" className={buttonClassName("outline", "sm", "rounded-lg")} onClick={resetComparisonSelection}>
+                Selecionar últimas 2
+              </button>
+            </div>
           </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <p className="p-5 text-small12 font-semibold text-text-muted">Carregando avaliações...</p>
-            ) : items.length === 0 ? (
-              <div className="p-5"><EmptyState title="Sem avaliações" description="Crie a primeira avaliação para iniciar a evolução clínica." action={{ label: "Nova avaliação", onClick: startNew }} /></div>
+          <CardContent className="space-y-4 pt-4">
+            <div className="flex flex-wrap gap-2">
+              {items.map((row) => {
+                const active = comparisonIds.includes(row.id);
+                return (
+                  <button
+                    key={`cmp-${row.id}`}
+                    type="button"
+                    className={buttonClassName(active ? "secondary" : "outline", "sm", "rounded-lg")}
+                    onClick={() => toggleComparisonRow(row.id)}
+                  >
+                    {row.assessment_date}
+                  </button>
+                );
+              })}
+            </div>
+            {comparisonRows.length < 2 ? (
+              <p className="rounded-xl border border-neutral-200/80 bg-neutral-50/60 px-3 py-3 text-small12 font-semibold text-text-muted">
+                Selecione pelo menos 2 avaliações para habilitar o comparativo técnico.
+              </p>
             ) : (
-              <ul className="divide-y divide-neutral-100/90">
-                {items.map((row) => (
-                  <li key={row.id} className="px-4 py-3 md:px-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button type="button" className="text-left" onClick={() => setSelectedId(row.id)}>
-                        <p className="text-body14 font-semibold text-text-primary">{row.assessment_date}</p>
-                        <p className="text-small12 text-text-secondary">{row.weight_kg != null ? `${row.weight_kg} kg` : "sem peso"} · {row.body_fat_pct != null ? `${row.body_fat_pct}% gordura` : "sem % gordura"}</p>
-                      </button>
-                      <div className="flex items-center gap-2">
-                        {selected?.id === row.id ? <Chip tone="primary">Selecionada</Chip> : null}
-                        <Button type="button" variant="outline" size="sm" onClick={() => editRow(row.id)}>Editar</Button>
-                        <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => void deleteCurrent(row.id)}>Excluir</Button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-x-auto rounded-xl border border-neutral-200/80">
+                <table className="min-w-[980px] w-full border-collapse text-small12">
+                  <thead className="sticky top-0 z-10 bg-neutral-50/90 backdrop-blur">
+                    <tr>
+                      <th className="sticky left-0 z-20 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Métrica
+                      </th>
+                      {comparisonRows.map((row) => (
+                        <th key={`head-${row.id}`} className="border-b border-neutral-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                          {row.assessment_date}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {COMPARISON_GROUPS.map((group) => (
+                      <React.Fragment key={group.id}>
+                        <tr>
+                          <td colSpan={comparisonRows.length + 1} className="border-b border-neutral-100 bg-primary/[0.05] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-text-secondary">
+                            {group.title}
+                          </td>
+                        </tr>
+                        {group.metrics.map((metric) => (
+                          <tr key={`${group.id}-${metric.key}`} className="border-b border-neutral-100/90">
+                            <td className="sticky left-0 z-10 bg-white px-3 py-2 font-semibold text-text-secondary">{metric.label}</td>
+                            {comparisonRows.map((row, idx) => (
+                              <td key={`${metric.key}-${row.id}`} className="px-3 py-2 align-top text-text-primary">
+                                <p className="font-semibold">{formatComparisonValue(metric, row)}</p>
+                                {metric.numeric ? (
+                                  <p className={`mt-0.5 text-[11px] font-semibold ${deltaTone(metric, idx)}`}>
+                                    vs ant.: {deltaLabel(metric, idx)}
+                                  </p>
+                                ) : null}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>
-      </section>
+      )}
 
-      {selected ? (
+      {viewMode === "history" && selected ? (
         <Card className="border-neutral-200/55">
           <CardHeader className="border-b border-neutral-100/90 pb-3">
             <p className="text-title16 font-semibold text-text-primary">Detalhe da avaliação selecionada</p>
