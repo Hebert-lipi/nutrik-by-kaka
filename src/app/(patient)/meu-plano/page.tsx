@@ -15,10 +15,13 @@ import { Chip } from "@/components/ui/chip";
 import { getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
 import { buildShoppingListFromPlan, groupShoppingByCategory } from "@/lib/clinical/shopping-list";
 import { fetchShoppingSnapshot } from "@/lib/supabase/shopping-lists";
+import { recordPerfMetric } from "@/lib/perf/perf-metrics";
 
 const POLL_MS = 22_000;
 
 export default function MeuPlanoPage() {
+  const mountAtRef = React.useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+  const measuredRef = React.useRef(false);
   const [email, setEmail] = React.useState<string | null | undefined>(undefined);
   const [portal, setPortal] = React.useState<Awaited<ReturnType<typeof loadPatientPortalState>> | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -74,6 +77,37 @@ export default function MeuPlanoPage() {
     }, POLL_MS);
     return () => window.clearInterval(t);
   }, [portal, refreshVersionMeta]);
+
+  React.useEffect(() => {
+    if (portal?.kind !== "ok") return;
+    let cancelled = false;
+    const loadSnapshot = async () => {
+      const snap = await fetchShoppingSnapshot(portal.patient.id, portal.plan.id, Math.max(1, portal.plan.currentVersionNumber));
+      if (cancelled) return;
+      setShoppingSnapshotItems(snap?.items ?? []);
+    };
+    void loadSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [portal]);
+
+  const shoppingItemsFromPlan = React.useMemo(() => {
+    if (portal?.kind !== "ok") return [] as ReturnType<typeof buildShoppingListFromPlan>;
+    return buildShoppingListFromPlan(portal.plan);
+  }, [portal]);
+
+  const groupedShopping = React.useMemo(
+    () => groupShoppingByCategory(shoppingSnapshotItems.length > 0 ? shoppingSnapshotItems : shoppingItemsFromPlan),
+    [shoppingSnapshotItems, shoppingItemsFromPlan],
+  );
+
+  React.useEffect(() => {
+    if (measuredRef.current || !portal || portal.kind !== "ok") return;
+    measuredRef.current = true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordPerfMetric("ui.open.portal_meu_plano", now - mountAtRef.current, portal.kind);
+  }, [portal]);
 
   if (email === undefined) {
     return (
@@ -153,8 +187,6 @@ export default function MeuPlanoPage() {
   }
 
   const { patient, plan } = portal;
-  const shoppingItemsFromPlan = buildShoppingListFromPlan(plan);
-  const groupedShopping = groupShoppingByCategory(shoppingSnapshotItems.length > 0 ? shoppingSnapshotItems : shoppingItemsFromPlan);
   const revisionFallback = getLastPlanRevisionAt(plan);
   const displayUpdatedIso = latestVersionAt ?? revisionFallback;
   const updatePending = Boolean(
@@ -174,19 +206,6 @@ export default function MeuPlanoPage() {
       setRefreshBusy(false);
     }
   };
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const loadSnapshot = async () => {
-      const snap = await fetchShoppingSnapshot(patient.id, plan.id, Math.max(1, plan.currentVersionNumber));
-      if (cancelled) return;
-      setShoppingSnapshotItems(snap?.items ?? []);
-    };
-    void loadSnapshot();
-    return () => {
-      cancelled = true;
-    };
-  }, [patient.id, plan.id, plan.currentVersionNumber]);
 
   return (
     <div className="space-y-8">

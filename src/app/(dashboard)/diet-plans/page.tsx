@@ -17,11 +17,12 @@ import { IconDietPlan } from "@/components/layout/dashboard/icons";
 import { buttonClassName } from "@/components/ui/button";
 import { cloneEntirePlan } from "@/lib/diet-plan-factory";
 import type { DraftPlan } from "@/lib/draft-storage";
+import { ensureFullDietPlan } from "@/lib/supabase/diet-plan-resolve";
 
 export default function DietPlansPage() {
   const router = useRouter();
   const { patients } = useSupabasePatients();
-  const { plans, removePlan, togglePublish, upsertPlan, loading, error } = useSupabaseDietPlans();
+  const { plans, removePlan, togglePublish, upsertPlan, loading, error, fetchPlanById } = useSupabaseDietPlans();
   const [listError, setListError] = React.useState<string | null>(null);
 
   function patientLabel(id: string | null) {
@@ -30,7 +31,8 @@ export default function DietPlansPage() {
   }
 
   async function duplicatePlan(pl: DraftPlan) {
-    const copy = cloneEntirePlan(pl);
+    const full = await ensureFullDietPlan(pl, fetchPlanById);
+    const copy = cloneEntirePlan(full);
     setListError(null);
     try {
       await upsertPlan(copy);
@@ -125,7 +127,7 @@ export default function DietPlansPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Chip tone="primary">{pl.meals.length} refeição(ões)</Chip>
+                        <Chip tone="primary">{pl.listMealsCount ?? pl.meals.length} refeição(ões)</Chip>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1.5">

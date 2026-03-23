@@ -39,6 +39,44 @@ export type DietPlanRow = {
   updated_at: string;
 };
 
+/** Linha leve para listagens (sem JSONB de conteúdo). Requer migração `20260328100000_diet_plans_list_perf_columns.sql`. */
+export type DietPlanListRow = {
+  id: string;
+  nutritionist_user_id: string;
+  patient_id: string | null;
+  title: string;
+  description: string;
+  status: "draft" | "published";
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  list_meals_count: number | null;
+  list_plan_version: number | null;
+  list_template_patient_count: number | null;
+};
+
+/** Plano publicado no portal: só snapshot (sem `structure_json` do rascunho). */
+export type DietPlanPublishedPortalRow = {
+  id: string;
+  nutritionist_user_id: string;
+  patient_id: string | null;
+  title: string;
+  description: string;
+  status: "published";
+  published_structure_json: DietPlanRow["published_structure_json"];
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Select para listagem rápida na área da nutricionista. */
+export const DIET_PLAN_SELECT_LIST =
+  "id,nutritionist_user_id,patient_id,title,description,status,published_at,created_at,updated_at,list_meals_count,list_plan_version,list_template_patient_count" as const;
+
+/** Select completo para edição / PDF / duplicar. */
+export const DIET_PLAN_SELECT_FULL =
+  "id,nutritionist_user_id,patient_id,title,description,status,structure_json,published_structure_json,published_at,created_at,updated_at" as const;
+
 export type PatientRow = {
   id: string;
   nutritionist_user_id: string;
@@ -124,6 +162,36 @@ function portalMealsFromRow(row: DietPlanRow): DraftPlan["portalMeals"] {
   return snap.meals?.length ? snap.meals : null;
 }
 
+export function dietPlanListRowToDraftPlan(row: DietPlanListRow): DraftPlan {
+  const linkedPatientId =
+    row.patient_id !== null && row.patient_id !== undefined && String(row.patient_id).trim()
+      ? String(row.patient_id).trim()
+      : null;
+  const planKind: PlanKind = linkedPatientId ? "patient_plan" : "template";
+  const mealsCount = Math.max(0, Math.floor(Number(row.list_meals_count) || 0));
+  const version = Math.max(1, Math.floor(Number(row.list_plan_version) || 1));
+  const templateUsage = Math.max(0, Math.floor(Number(row.list_template_patient_count) || 0));
+
+  return normalizePlan({
+    id: row.id,
+    name: row.title,
+    description: row.description,
+    status: row.status,
+    patientCount: linkedPatientId ? 1 : templateUsage,
+    planKind,
+    linkedPatientId,
+    professionalName: "",
+    professionalRegistration: "",
+    patientHeaderLabel: "",
+    meals: [],
+    revisionHistory: [],
+    currentVersionNumber: version,
+    publishedAt: row.published_at,
+    isSummaryRow: true,
+    listMealsCount: mealsCount,
+  });
+}
+
 /** Plano para edição na área da nutricionista (`structure_json` = rascunho em curso). */
 export function dietPlanRowToDraftPlan(row: DietPlanRow): DraftPlan {
   const s = asStructure(row.structure_json);
@@ -180,6 +248,41 @@ export function dietPlanRowToDraftPlanForPortal(row: DietPlanRow): DraftPlan {
     professionalName: s.professionalName || base.professionalName,
     professionalRegistration: s.professionalRegistration || base.professionalRegistration,
     patientHeaderLabel: s.patientHeaderLabel || base.patientHeaderLabel,
+  });
+}
+
+/**
+ * Portal do paciente: só `published_structure_json` (menos payload que trazer `structure_json`).
+ */
+export function dietPlanPublishedPortalRowToDraftPlanForPortal(row: DietPlanPublishedPortalRow): DraftPlan {
+  const rawSnap =
+    row.published_structure_json && typeof row.published_structure_json === "object"
+      ? row.published_structure_json
+      : null;
+  const s = asStructure(rawSnap);
+  const linkedPatientId =
+    row.patient_id !== null && row.patient_id !== undefined && String(row.patient_id).trim()
+      ? String(row.patient_id).trim()
+      : s.linkedPatientId ?? null;
+  const planKind: PlanKind = linkedPatientId ? "patient_plan" : s.planKind === "patient_plan" ? "patient_plan" : "template";
+  const portalMeals = s.meals?.length ? s.meals : null;
+  return normalizePlan({
+    id: row.id,
+    name: row.title,
+    description: row.description,
+    status: "published",
+    patientCount: linkedPatientId ? 1 : (s.patientCount ?? 0),
+    planKind,
+    linkedPatientId,
+    professionalName: s.professionalName,
+    professionalRegistration: s.professionalRegistration,
+    patientHeaderLabel: s.patientHeaderLabel,
+    meals: s.meals,
+    revisionHistory: s.revisionHistory,
+    currentVersionNumber: s.currentVersionNumber,
+    publishedAt: row.published_at,
+    ...(portalMeals ? { portalMeals } : {}),
+    nutritionProfile: s.nutritionProfile,
   });
 }
 

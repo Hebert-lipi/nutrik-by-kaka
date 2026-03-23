@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
+import { useResolvedDietPlan } from "@/hooks/use-resolved-diet-plan";
+import { ensureFullDietPlan } from "@/lib/supabase/diet-plan-resolve";
 import {
   getPatientFacingMeals,
   getPublishedPlanForPatient,
@@ -20,17 +22,22 @@ import { cloneEntirePlan } from "@/lib/diet-plan-factory";
 import { formatPatientDateTime } from "@/lib/patients/patient-display";
 import type { DraftPlan } from "@/lib/draft-storage";
 import { cn } from "@/lib/utils";
+import { recordPerfMetric } from "@/lib/perf/perf-metrics";
 
 export default function PatientPlanoModulePage() {
+  const mountAtRef = React.useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+  const measuredRef = React.useRef(false);
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
   const { patients, loading: lp } = useSupabasePatients();
-  const { plans, loading: lpl, togglePublish, upsertPlan, refresh } = useSupabaseDietPlans();
+  const { plans, loading: lpl, togglePublish, upsertPlan, refresh, fetchPlanById } = useSupabaseDietPlans();
 
   const patient = patients.find((p) => p.id === patientId);
   const published = patient ? getPublishedPlanForPatient(patient.id, plans) : null;
-  const lastAt = getLastPlanRevisionAt(published);
+  const { plan: publishedDetail, loading: publishedResolving } = useResolvedDietPlan(published, fetchPlanById);
+  const previewPlan = published ? (publishedDetail ?? published) : null;
+  const lastAt = getLastPlanRevisionAt(previewPlan);
   const linked = patient ? getPlansLinkedToPatient(patient.id, plans) : [];
 
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -60,13 +67,20 @@ export default function PatientPlanoModulePage() {
 
   const sorted = sortLinked(linked);
 
+  React.useEffect(() => {
+    if (measuredRef.current || lp || lpl || publishedResolving || !patient) return;
+    measuredRef.current = true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordPerfMetric("ui.open.patient_plan_module", now - mountAtRef.current, patientId);
+  }, [lp, lpl, publishedResolving, patient, patientId]);
+
   if (!patientId) {
     return (
       <EmptyState title="Paciente não encontrado" action={{ label: "Voltar", onClick: () => router.push("/patients") }} />
     );
   }
 
-  if (lp || lpl) {
+  if (lp) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando…</div>
     );
@@ -95,22 +109,30 @@ export default function PatientPlanoModulePage() {
       <Card
         className={cn(
           "overflow-hidden border-2 shadow-premium",
-          published ? "border-secondary/35 bg-gradient-to-br from-secondary/[0.07] via-bg-0 to-bg-0 ring-1 ring-secondary/15" : "border-neutral-200/60",
+          lpl || publishedResolving
+            ? "border-neutral-200/60"
+            : published
+              ? "border-secondary/35 bg-gradient-to-br from-secondary/[0.07] via-bg-0 to-bg-0 ring-1 ring-secondary/15"
+              : "border-neutral-200/60",
         )}
       >
         <CardHeader className="border-b border-neutral-100/80 pb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Chip tone={published ? "success" : "yellow"} className="font-semibold">
-              {published ? "Plano ativo no portal" : "Sem plano publicado"}
+            <Chip tone={lpl || publishedResolving ? "muted" : published ? "success" : "yellow"} className="font-semibold">
+              {lpl || publishedResolving
+                ? "Carregando plano..."
+                : published
+                  ? "Plano ativo no portal"
+                  : "Sem plano publicado"}
             </Chip>
-            {published ? (
+            {!lpl && !publishedResolving && published ? (
               <Chip tone="primary" className="font-bold">
                 v{published.currentVersionNumber}
               </Chip>
             ) : null}
           </div>
           <p className="mt-3 text-lg font-semibold text-text-primary md:text-title16">
-            {published?.name ?? "Defina um plano publicado para este paciente"}
+            {lpl || publishedResolving ? "Carregando..." : published?.name ?? "Defina um plano publicado para este paciente"}
           </p>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-small12 font-semibold text-text-secondary">
             <span>
@@ -120,12 +142,14 @@ export default function PatientPlanoModulePage() {
             <span>
               Última publicação:{" "}
               <span className="font-semibold text-text-primary">
-                {published?.publishedAt ? formatPatientDateTime(published.publishedAt) : "—"}
+                {lpl || publishedResolving ? "..." : published?.publishedAt ? formatPatientDateTime(published.publishedAt) : "—"}
               </span>
             </span>
             <span>
               Última revisão salva:{" "}
-              <span className="font-semibold text-text-primary">{lastAt ? formatPatientDateTime(lastAt) : "—"}</span>
+              <span className="font-semibold text-text-primary">
+                {lpl || publishedResolving ? "..." : lastAt ? formatPatientDateTime(lastAt) : "—"}
+              </span>
             </span>
           </div>
         </CardHeader>
@@ -136,7 +160,7 @@ export default function PatientPlanoModulePage() {
           >
             Criar plano
           </Link>
-          {published ? (
+          {!lpl && !publishedResolving && published ? (
             <>
               <Link href={`/diet-plans/${published.id}/edit`} className={buttonClassName("secondary", "md", "rounded-xl")}>
                 Editar plano ativo
@@ -149,7 +173,8 @@ export default function PatientPlanoModulePage() {
                 disabled={busyId === `dup-${published.id}`}
                 onClick={() =>
                   void runAction(`dup-${published.id}`, async () => {
-                    const copy = cloneEntirePlan(published);
+                    const full = await ensureFullDietPlan(publishedDetail ?? published, fetchPlanById);
+                    const copy = cloneEntirePlan(full);
                     const next = {
                       ...copy,
                       linkedPatientId: patientId,
@@ -174,7 +199,7 @@ export default function PatientPlanoModulePage() {
               </Button>
             </>
           ) : null}
-          {sorted.find((p) => p.status === "draft") ? (
+          {!lpl && !publishedResolving && sorted.find((p) => p.status === "draft") ? (
             <Button
               type="button"
               variant="primary"
@@ -197,7 +222,14 @@ export default function PatientPlanoModulePage() {
 
       <div>
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Planos deste paciente</p>
-        {sorted.length === 0 ? (
+        {lpl ? (
+          <Card className="border-neutral-200/70 bg-neutral-50/40">
+            <CardContent className="space-y-2 py-8">
+              <div className="h-4 w-48 animate-pulse rounded bg-neutral-200/80" />
+              <div className="h-4 w-64 animate-pulse rounded bg-neutral-200/80" />
+            </CardContent>
+          </Card>
+        ) : sorted.length === 0 ? (
           <Card className="border-dashed border-neutral-300/90 bg-neutral-50/40 shadow-inner">
             <CardContent className="py-12 text-center">
               <p className="text-body14 font-semibold text-text-muted">Nenhum plano vinculado ainda.</p>
@@ -234,7 +266,7 @@ export default function PatientPlanoModulePage() {
                         <Chip tone="muted">{pl.planKind === "patient_plan" ? "Paciente" : "Modelo"}</Chip>
                       </div>
                       <p className="mt-2 text-[11px] font-semibold text-text-muted">
-                        {pl.meals.length} refeição(ões) · v{pl.currentVersionNumber}
+                        {pl.listMealsCount ?? pl.meals.length} refeição(ões) · v{pl.currentVersionNumber}
                         {pl.publishedAt ? ` · publicado ${formatPatientDateTime(pl.publishedAt)}` : ""}
                       </p>
                     </div>
@@ -250,7 +282,8 @@ export default function PatientPlanoModulePage() {
                         disabled={busyId === `dup-row-${pl.id}`}
                         onClick={() =>
                           void runAction(`dup-row-${pl.id}`, async () => {
-                            const copy = cloneEntirePlan(pl);
+                            const full = await ensureFullDietPlan(pl, fetchPlanById);
+                            const copy = cloneEntirePlan(full);
                             const next = { ...copy, linkedPatientId: patientId, patientHeaderLabel: patient.name };
                             await upsertPlan(next);
                             router.push(`/diet-plans/${next.id}/edit`);
@@ -289,21 +322,25 @@ export default function PatientPlanoModulePage() {
               onClick: () => router.push(`/diet-plans/new?patientId=${encodeURIComponent(patientId)}`),
             }}
           />
-        ) : (
+        ) : publishedResolving ? (
+          <p className="rounded-xl border border-neutral-200/80 bg-neutral-50/50 px-4 py-6 text-center text-body14 font-semibold text-text-muted">
+            Carregando cardápio para pré-visualização…
+          </p>
+        ) : previewPlan ? (
           <>
             <div className="flex flex-wrap gap-2">
               <Chip tone="success">Publicado</Chip>
-              <Chip tone="muted">{getPatientFacingMeals(published).length} refeições</Chip>
+              <Chip tone="muted">{getPatientFacingMeals(previewPlan).length} refeições</Chip>
             </div>
             <PlanMealsByPeriod
-              meals={getPatientFacingMeals(published)}
+              meals={getPatientFacingMeals(previewPlan)}
               planName={published.name}
               subtitle="Como em /meu-plano"
               lastUpdatedIso={lastAt}
               headerBadge={<Chip tone="primary">Nutricionista</Chip>}
             />
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

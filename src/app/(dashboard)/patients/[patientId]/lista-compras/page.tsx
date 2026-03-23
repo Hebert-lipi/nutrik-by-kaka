@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
+import { useResolvedDietPlan } from "@/hooks/use-resolved-diet-plan";
 import { getPublishedPlanForPatient } from "@/lib/clinical/patient-plan";
 import { buildShoppingListFromPlan, groupShoppingByCategory, summarizeShoppingQuality, type ShoppingListItem } from "@/lib/clinical/shopping-list";
 import Link from "next/link";
@@ -17,10 +18,14 @@ export default function PatientListaComprasPage() {
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
   const { patients, loading } = useSupabasePatients();
-  const { plans, loading: plansLoading } = useSupabaseDietPlans();
+  const { plans, loading: plansLoading, fetchPlanById } = useSupabaseDietPlans();
   const patient = patients.find((p) => p.id === patientId);
   const publishedPlan = patient ? getPublishedPlanForPatient(patient.id, plans) : null;
-  const shoppingItems = publishedPlan ? buildShoppingListFromPlan(publishedPlan) : [];
+  const { plan: publishedResolved } = useResolvedDietPlan(publishedPlan, fetchPlanById);
+  const shoppingItems =
+    publishedResolved && !publishedResolved.isSummaryRow
+      ? buildShoppingListFromPlan(publishedResolved)
+      : [];
   const [snapshot, setSnapshot] = React.useState<ShoppingSnapshot | null>(null);
   const [workingItems, setWorkingItems] = React.useState<ShoppingListItem[]>([]);
   const [notes, setNotes] = React.useState("");
@@ -34,8 +39,15 @@ export default function PatientListaComprasPage() {
       setNotes("");
       return;
     }
+    if (!publishedResolved || publishedResolved.isSummaryRow) {
+      setSnapshot(null);
+      setWorkingItems([]);
+      setNotes("");
+      return;
+    }
+    const pr = publishedResolved;
     let cancelled = false;
-    void fetchShoppingSnapshot(patient.id, publishedPlan.id, Math.max(1, publishedPlan.currentVersionNumber)).then((snap) => {
+    void fetchShoppingSnapshot(patient.id, pr.id, Math.max(1, pr.currentVersionNumber)).then((snap) => {
       if (cancelled) return;
       if (snap) {
         setSnapshot(snap);
@@ -50,7 +62,14 @@ export default function PatientListaComprasPage() {
     return () => {
       cancelled = true;
     };
-  }, [patient?.id, publishedPlan?.id, publishedPlan?.currentVersionNumber, shoppingItems]);
+  }, [
+    patient?.id,
+    publishedPlan?.id,
+    publishedResolved?.id,
+    publishedResolved?.currentVersionNumber,
+    publishedResolved?.isSummaryRow,
+    shoppingItems,
+  ]);
 
   const sourceItems = snapshot ? snapshot.items : shoppingItems;
   const grouped = groupShoppingByCategory(workingItems);

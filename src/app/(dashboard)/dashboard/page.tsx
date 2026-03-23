@@ -13,6 +13,7 @@ import { IconStatCheck, IconStatLayers, IconStatPeople, IconChevronRight } from 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { Chip } from "@/components/ui/chip";
 import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
+import { getPerfSummary } from "@/lib/perf/perf-metrics";
 
 function initials(name: string) {
   return (
@@ -29,6 +30,14 @@ export default function DashboardPage() {
   const router = useRouter();
   const snap = useDashboardSnapshot();
   const { patients, plans, publishedPlans } = snap.counts;
+  const [perfRows, setPerfRows] = React.useState<Array<{ key: string; count: number; avgMs: number; p95Ms: number }>>([]);
+
+  React.useEffect(() => {
+    const refreshPerf = () => setPerfRows(getPerfSummary().sort((a, b) => b.avgMs - a.avgMs));
+    refreshPerf();
+    const t = window.setInterval(refreshPerf, 3000);
+    return () => window.clearInterval(t);
+  }, []);
 
   if (snap.loading) {
     return (
@@ -144,6 +153,44 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-neutral-200/60">
+        <CardHeader className="border-b border-neutral-100/90 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-title16 font-semibold text-text-primary">Métricas de performance (sessão)</p>
+            <Chip tone="muted">P95 / média</Chip>
+          </div>
+          <p className="mt-1 text-small12 text-text-secondary">Dados locais coletados durante uso real da interface.</p>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {perfRows.length === 0 ? (
+            <p className="text-small12 text-text-muted">Sem dados ainda. Navegue pelas telas e execute ações para preencher este painel.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[720px] w-full text-small12">
+                <thead>
+                  <tr className="border-b border-neutral-200/90 text-left text-[11px] uppercase tracking-wide text-text-muted">
+                    <th className="py-2 pr-2">Ação</th>
+                    <th className="px-2 py-2">Ocorrências</th>
+                    <th className="px-2 py-2">Média (ms)</th>
+                    <th className="px-2 py-2">P95 (ms)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perfRows.slice(0, 14).map((row) => (
+                    <tr key={row.key} className="border-b border-neutral-100/80">
+                      <td className="py-2 pr-2 font-semibold text-text-primary">{row.key}</td>
+                      <td className="px-2 py-2 text-text-secondary">{row.count}</td>
+                      <td className="px-2 py-2 text-text-secondary">{row.avgMs}</td>
+                      <td className="px-2 py-2 text-text-secondary">{row.p95Ms}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
         <Card className="flex h-full flex-col">

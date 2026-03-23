@@ -30,6 +30,7 @@ import {
   getNumericComparisonValue,
   type AssessmentComparisonMetric,
 } from "@/lib/clinical/assessment-comparison";
+import { recordPerfMetric } from "@/lib/perf/perf-metrics";
 
 type NumFields =
   | "weight_kg"
@@ -125,6 +126,8 @@ function asNum(s: string): number | null {
 }
 
 export default function PatientAvaliacoesPage() {
+  const mountAtRef = React.useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+  const measuredRef = React.useRef(false);
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
@@ -292,23 +295,31 @@ export default function PatientAvaliacoesPage() {
     }
   }
 
-  if (!patientId) return <EmptyState title="Paciente inválido" action={{ label: "Voltar", onClick: () => router.push("/patients") }} />;
-  if (lp) return <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando…</div>;
-  if (!patient) return <EmptyState title="Paciente não encontrado" action={{ label: "Pacientes", onClick: () => router.push("/patients") }} />;
+  React.useEffect(() => {
+    if (items.length < 2) return;
+    setComparisonIds((prev) => {
+      if (prev.length > 0) return prev.filter((id) => items.some((x) => x.id === id));
+      return items.slice(0, 2).map((x) => x.id);
+    });
+  }, [items]);
 
-  const chartWeight = [...items].reverse().filter((x) => x.weight_kg != null);
-  const chartBmi = [...items]
-    .reverse()
-    .map((x) => {
-      const w = x.weight_kg;
-      const h = x.height_cm;
-      if (!w || !h) return null;
-      const bmi = w / Math.pow(h / 100, 2);
-      return { date: x.assessment_date.slice(5), value: Number.isFinite(bmi) ? Math.round(bmi * 100) / 100 : null };
-    })
-    .filter(Boolean) as Array<{ date: string; value: number }>;
-  const chartFat = [...items].reverse().filter((x) => x.body_fat_pct != null);
-  const chartLean = [...items].reverse().filter((x) => x.lean_mass_kg != null);
+  const chartWeight = React.useMemo(() => [...items].reverse().filter((x) => x.weight_kg != null), [items]);
+  const chartBmi = React.useMemo(
+    () =>
+      [...items]
+        .reverse()
+        .map((x) => {
+          const w = x.weight_kg;
+          const h = x.height_cm;
+          if (!w || !h) return null;
+          const bmi = w / Math.pow(h / 100, 2);
+          return { date: x.assessment_date.slice(5), value: Number.isFinite(bmi) ? Math.round(bmi * 100) / 100 : null };
+        })
+        .filter(Boolean) as Array<{ date: string; value: number }>,
+    [items],
+  );
+  const chartFat = React.useMemo(() => [...items].reverse().filter((x) => x.body_fat_pct != null), [items]);
+  const chartLean = React.useMemo(() => [...items].reverse().filter((x) => x.lean_mass_kg != null), [items]);
   const comparisonRows = items.filter((x) => comparisonIds.includes(x.id));
 
   function toggleComparisonRow(id: string) {
@@ -351,12 +362,15 @@ export default function PatientAvaliacoesPage() {
   }
 
   React.useEffect(() => {
-    if (items.length < 2) return;
-    setComparisonIds((prev) => {
-      if (prev.length > 0) return prev.filter((id) => items.some((x) => x.id === id));
-      return items.slice(0, 2).map((x) => x.id);
-    });
-  }, [items]);
+    if (measuredRef.current || lp || loading || !patient) return;
+    measuredRef.current = true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordPerfMetric("ui.open.patient_assessments", now - mountAtRef.current, patientId);
+  }, [lp, loading, patient, patientId]);
+
+  if (!patientId) return <EmptyState title="Paciente inválido" action={{ label: "Voltar", onClick: () => router.push("/patients") }} />;
+  if (lp) return <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando…</div>;
+  if (!patient) return <EmptyState title="Paciente não encontrado" action={{ label: "Pacientes", onClick: () => router.push("/patients") }} />;
 
   return (
     <div className="space-y-8">

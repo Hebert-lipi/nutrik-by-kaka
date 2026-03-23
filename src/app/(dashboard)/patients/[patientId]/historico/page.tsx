@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Chip } from "@/components/ui/chip";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
+import { useResolvedDietPlan } from "@/hooks/use-resolved-diet-plan";
 import { patientDietSummary } from "@/lib/clinical/dashboard-snapshot";
 import { fetchAdherenceLogsForPatient, type AdherenceLogRow } from "@/lib/supabase/patient-adherence-db";
 import { formatPatientDateTime } from "@/lib/patients/patient-display";
@@ -27,17 +28,24 @@ export default function PatientHistoricoPage() {
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
   const { patients, loading: lp } = useSupabasePatients();
-  const { plans, loading: lpl } = useSupabaseDietPlans();
+  const { plans, loading: lpl, fetchPlanById } = useSupabaseDietPlans();
   const patient = patients.find((p) => p.id === patientId);
   const summary = patient ? patientDietSummary(patient, plans) : null;
+  const { plan: publishedResolved } = useResolvedDietPlan(summary?.publishedPlan ?? null, fetchPlanById);
   const [adherenceLogs, setAdherenceLogs] = React.useState<AdherenceLogRow[]>([]);
+  const [adherenceLoading, setAdherenceLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!patient?.id) return;
     let c = false;
-    void fetchAdherenceLogsForPatient(patient.id, 100).then((rows) => {
-      if (!c) setAdherenceLogs(rows);
-    });
+    setAdherenceLoading(true);
+    void fetchAdherenceLogsForPatient(patient.id, 100)
+      .then((rows) => {
+        if (!c) setAdherenceLogs(rows);
+      })
+      .finally(() => {
+        if (!c) setAdherenceLoading(false);
+      });
     return () => {
       c = true;
     };
@@ -54,7 +62,7 @@ export default function PatientHistoricoPage() {
         kind: "patient",
       });
     }
-    const revs = summary?.publishedPlan?.revisionHistory ?? [];
+    const revs = publishedResolved?.revisionHistory ?? [];
     for (const r of [...revs].reverse()) {
       list.push({
         id: `rev-${r.id}`,
@@ -86,12 +94,12 @@ export default function PatientHistoricoPage() {
       });
     }
     return list.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [patient, summary, adherenceLogs]);
+  }, [patient, publishedResolved, adherenceLogs]);
 
   if (!patientId) {
     return <EmptyState title="ID inválido" action={{ label: "Voltar", onClick: () => router.push("/patients") }} />;
   }
-  if (lp || lpl) {
+  if (lp) {
     return <div className="flex min-h-[40vh] items-center justify-center font-semibold text-text-muted">Carregando…</div>;
   }
   if (!patient) {
@@ -115,7 +123,9 @@ export default function PatientHistoricoPage() {
         </CardHeader>
         <CardContent className="p-0">
           {events.length === 0 ? (
-            <div className="px-5 py-14 text-center text-body14 font-semibold text-text-muted">Nenhum evento para exibir ainda.</div>
+            <div className="px-5 py-14 text-center text-body14 font-semibold text-text-muted">
+              {lpl || adherenceLoading ? "Carregando eventos..." : "Nenhum evento para exibir ainda."}
+            </div>
           ) : (
             <ul className="divide-y divide-neutral-100/90">
               {events.map((ev, i) => (

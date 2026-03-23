@@ -30,6 +30,7 @@ import { BuilderFeedbackBanner, type BuilderFeedback } from "./builder-feedback-
 import { NutritionIntelligencePanel } from "./nutrition-intelligence-panel";
 import { fetchPlanVersions, type DietPlanVersionRow } from "@/lib/supabase/plan-versions";
 import { profileFromPatient, usePlanNutritionEngine } from "@/hooks/use-plan-nutrition-engine";
+import { measurePerf } from "@/lib/perf/perf-metrics";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
 const FALLBACK_PLAN_FOR_HOOKS = normalizePlan({});
@@ -255,7 +256,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     setSavingMode("draft");
     try {
       const toSave = buildNextPersistedPlan(plan.status);
-      await savePlanFromBuilder(toSave, "draft");
+      await measurePerf("ui.save_plan_draft.total", () => savePlanFromBuilder(toSave, "draft"));
       const fresh = await fetchPlanById(toSave.id);
       if (fresh) setPlan(fresh);
       setVersionListKey((k) => k + 1);
@@ -298,7 +299,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     setSavingMode("publish");
     try {
       const toSave = buildNextPersistedPlan("published");
-      await savePlanFromBuilder(toSave, "publish");
+      await measurePerf("ui.publish_plan.total", () => savePlanFromBuilder(toSave, "publish"));
       const fresh = await fetchPlanById(toSave.id);
       if (fresh) setPlan(fresh);
       setVersionListKey((k) => k + 1);

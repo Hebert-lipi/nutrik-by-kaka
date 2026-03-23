@@ -161,6 +161,13 @@ export type DraftPlan = {
    */
   portalMeals?: DraftPlanMeal[] | null;
   nutritionProfile?: PlanNutritionProfile;
+  /**
+   * Linha de listagem sem `structure_json` / `published_structure_json`.
+   * Telas que precisam de refeições, histórico ou duplicar devem chamar `fetchPlanById`.
+   */
+  isSummaryRow?: boolean;
+  /** Contagem de refeições vinda do banco (colunas geradas) quando `isSummaryRow`. */
+  listMealsCount?: number;
 };
 
 const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade", "porção"];
@@ -515,6 +522,10 @@ export function normalizePlan(raw: unknown): DraftPlan {
   const revRaw = o.revisionHistory;
   const revisions = Array.isArray(revRaw) ? revRaw.map(normalizeRevision).filter(Boolean) as DraftPlanRevisionSnapshot[] : [];
   const cv = Number(o.currentVersionNumber);
+  const isSummaryRow = o.isSummaryRow === true;
+  const listMealsRaw = o.listMealsCount;
+  const listMealsCount =
+    typeof listMealsRaw === "number" && Number.isFinite(listMealsRaw) ? Math.max(0, Math.floor(listMealsRaw)) : undefined;
 
   const planKind: PlanKind = o.planKind === "patient_plan" ? "patient_plan" : "template";
   const linked =
@@ -531,7 +542,7 @@ export function normalizePlan(raw: unknown): DraftPlan {
     professionalName: typeof o.professionalName === "string" ? o.professionalName : "",
     professionalRegistration: typeof o.professionalRegistration === "string" ? o.professionalRegistration : "",
     patientHeaderLabel: typeof o.patientHeaderLabel === "string" ? o.patientHeaderLabel : "",
-    meals: meals.length ? meals : [createEmptyMeal("Café da manhã", 0)],
+    meals: meals.length ? meals : isSummaryRow ? [] : [createEmptyMeal("Café da manhã", 0)],
     revisionHistory: revisions.slice(-20),
     currentVersionNumber: Number.isFinite(cv) ? Math.max(1, Math.floor(cv)) : 1,
     ...(typeof o.publishedAt === "string" || o.publishedAt === null
@@ -539,6 +550,8 @@ export function normalizePlan(raw: unknown): DraftPlan {
       : {}),
     ...(Array.isArray(o.portalMeals) ? { portalMeals: o.portalMeals.map((m, i) => normalizeMeal(m, i)) } : {}),
     nutritionProfile: normalizeNutritionProfile(o.nutritionProfile),
+    ...(isSummaryRow ? { isSummaryRow: true as const } : {}),
+    ...(listMealsCount !== undefined ? { listMealsCount } : {}),
   };
 }
 

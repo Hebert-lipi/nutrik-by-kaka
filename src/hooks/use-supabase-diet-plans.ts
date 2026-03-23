@@ -5,11 +5,20 @@ import { supabase } from "@/lib/supabaseClient";
 import type { DraftPlan } from "@/lib/draft-storage";
 import { normalizePlan } from "@/lib/draft-storage";
 import {
+  DIET_PLAN_SELECT_FULL,
+  DIET_PLAN_SELECT_LIST,
+  dietPlanListRowToDraftPlan,
   dietPlanRowToDraftPlan,
   draftPlanToStructure,
+  type DietPlanListRow,
   type DietPlanRow,
 } from "@/lib/supabase/plan-mapper";
 import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
+import { measurePerf } from "@/lib/perf/perf-metrics";
+
+const PLANS_CACHE_TTL_MS = 45_000;
+let plansCache: { data: DraftPlan[]; fetchedAt: number } | null = null;
+let inflightPlansRefresh: Promise<void> | null = null;
 
 export type SavePlanFromBuilderMode = "draft" | "publish";
 
@@ -18,35 +27,60 @@ export function useSupabaseDietPlans() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const refresh = React.useCallback(async () => {
-    setError(null);
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData.user) {
-      setPlans([]);
+  const refresh = React.useCallback(async (force = false) => {
+    const cached = plansCache;
+    const cacheFresh = !force && cached && Date.now() - cached.fetchedAt < PLANS_CACHE_TTL_MS;
+    if (cacheFresh) {
+      setPlans(cached.data);
       setLoading(false);
-      if (userErr) setError(userErr.message);
       return;
     }
-
-    const { data, error: qErr } = await supabase
-      .from("diet_plans")
-      .select("*")
-      .eq("nutritionist_user_id", userData.user.id)
-      .order("updated_at", { ascending: false });
-
-    if (qErr) {
-      setError(qErr.message);
-      setPlans([]);
-    } else {
-      setPlans((data as DietPlanRow[]).map(dietPlanRowToDraftPlan));
+    if (inflightPlansRefresh && !force) {
+      await inflightPlansRefresh;
+      return;
     }
-    setLoading(false);
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) {
+        setPlans([]);
+        setLoading(false);
+        if (userErr) setError(userErr.message);
+        return;
+      }
+
+      const { data, error: qErr } = await measurePerf(
+        "dietPlans.refresh.query",
+        () =>
+          supabase
+            .from("diet_plans")
+            .select(DIET_PLAN_SELECT_LIST)
+            .eq("nutritionist_user_id", userData.user.id)
+            .order("updated_at", { ascending: false }),
+        force ? "force" : "cached-miss",
+      );
+
+      if (qErr) {
+        setError(qErr.message);
+        setPlans([]);
+      } else {
+        const mapped = (data as DietPlanListRow[]).map(dietPlanListRowToDraftPlan);
+        setPlans(mapped);
+        plansCache = { data: mapped, fetchedAt: Date.now() };
+      }
+      setLoading(false);
+    };
+    inflightPlansRefresh = run().finally(() => {
+      inflightPlansRefresh = null;
+    });
+    await inflightPlansRefresh;
   }, []);
 
   React.useEffect(() => {
     void refresh();
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void refresh();
+      void refresh(true);
     });
     return () => sub.subscription.unsubscribe();
   }, [refresh]);
@@ -86,10 +120,10 @@ export function useSupabaseDietPlans() {
         published_structure_json: publishedStructureForRow,
       };
 
-      const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
+      const { error: upErr } = await measurePerf("dietPlans.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }));
       if (upErr) throw new Error(upErr.message);
       await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
-      await refresh();
+      await refresh(true);
     },
     [refresh],
   );
@@ -165,13 +199,18 @@ export function useSupabaseDietPlans() {
         published_structure_json: publishedStructureJson,
       };
 
-      const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
+      const { error: upErr } = await measurePerf("dietPlans.saveFromBuilder.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }), mode);
       if (upErr) throw new Error(upErr.message);
 
       if (mode === "publish" && normalized.planKind === "patient_plan" && patientId) {
-        const { data: rpcData, error: rpcErr } = await supabase.rpc("publish_diet_plan_for_patient", {
-          p_plan_id: normalized.id,
-        });
+        const { data: rpcData, error: rpcErr } = await measurePerf(
+          "dietPlans.publish.rpc",
+          () =>
+            supabase.rpc("publish_diet_plan_for_patient", {
+              p_plan_id: normalized.id,
+            }),
+          "saveFromBuilder",
+        );
         if (rpcErr) throw new Error(rpcErr.message);
         const payload = rpcData as { ok?: boolean; error?: string } | null;
         if (!payload?.ok) {
@@ -180,13 +219,22 @@ export function useSupabaseDietPlans() {
       }
 
       await insertDietPlanVersion(normalized.id, structure, userData.user.id);
-      await refresh();
+      await refresh(true);
     },
     [refresh],
   );
 
   const fetchPlanById = React.useCallback(async (id: string): Promise<DraftPlan | null> => {
-    const { data, error: qErr } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
+    const { data, error: qErr } = await measurePerf(
+      "dietPlans.fetchById.query",
+        () =>
+          supabase
+            .from("diet_plans")
+            .select(DIET_PLAN_SELECT_FULL)
+            .eq("id", id)
+            .maybeSingle(),
+      id,
+    );
     if (qErr || !data) return null;
     return dietPlanRowToDraftPlan(data as DietPlanRow);
   }, []);
@@ -195,7 +243,7 @@ export function useSupabaseDietPlans() {
     async (id: string) => {
       const { error: delErr } = await supabase.from("diet_plans").delete().eq("id", id);
       if (delErr) throw new Error(delErr.message);
-      await refresh();
+      await refresh(true);
     },
     [refresh],
   );
@@ -259,12 +307,16 @@ export function useSupabaseDietPlans() {
         if (upErr) throw new Error(upErr.message);
       }
 
-      const { data: row } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
+      const { data: row } = await supabase
+        .from("diet_plans")
+        .select(DIET_PLAN_SELECT_FULL)
+        .eq("id", id)
+        .maybeSingle();
       if (row) {
         const pl = dietPlanRowToDraftPlan(row as DietPlanRow);
         await insertDietPlanVersion(id, draftPlanToStructure(pl), uid);
       }
-      await refresh();
+      await refresh(true);
     },
     [plans, refresh],
   );

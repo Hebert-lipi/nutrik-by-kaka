@@ -10,6 +10,7 @@ import { PlanPdfDocument } from "@/components/plan-pdf/plan-pdf-document";
 import type { PlanPdfVariant } from "@/lib/pdf/plan-pdf-model";
 import { fetchShoppingSnapshot } from "@/lib/supabase/shopping-lists";
 import type { ShoppingListItem } from "@/lib/clinical/shopping-list";
+import { measurePerf, recordPerfMetric } from "@/lib/perf/perf-metrics";
 
 const variants: Array<{ id: PlanPdfVariant; label: string }> = [
   { id: "full", label: "PDF completo" },
@@ -61,6 +62,8 @@ export default function DietPlanPdfPage() {
   const printedRef = React.useRef(false);
   const [downloading, setDownloading] = React.useState(false);
   const [shoppingOverride, setShoppingOverride] = React.useState<ShoppingListItem[] | null>(null);
+  const mountAtRef = React.useRef<number>(typeof performance !== "undefined" ? performance.now() : Date.now());
+  const measuredRef = React.useRef(false);
 
   React.useEffect(() => {
     let c = false;
@@ -104,6 +107,12 @@ export default function DietPlanPdfPage() {
       cancelled = true;
     };
   }, [plan?.id, plan?.linkedPatientId, plan?.currentVersionNumber]);
+  React.useEffect(() => {
+    if (loading || !plan || measuredRef.current) return;
+    measuredRef.current = true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordPerfMetric("ui.open.pdf_page", now - mountAtRef.current, variant);
+  }, [loading, plan, variant]);
 
   const downloadPdfFile = React.useCallback(async () => {
     const root = document.getElementById("pdf-print-root");
@@ -145,7 +154,7 @@ export default function DietPlanPdfPage() {
         const y = (ph - wh) / 2;
         pdf.addImage(wm.dataUrl, "PNG", x, y, ww, wh, undefined, "FAST");
       }
-      await worker.save();
+      await measurePerf("ui.generate_pdf.total", () => worker.save(), variant);
     } finally {
       root.classList.remove("pdf-exporting");
       setDownloading(false);

@@ -7,21 +7,44 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
+import { ensureFullDietPlans } from "@/lib/supabase/diet-plan-resolve";
 import { getPublishedPlanForPatient, getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
 import { buildRecipesFromPlan } from "@/lib/pdf/plan-pdf-model";
 import { Chip } from "@/components/ui/chip";
+import type { DraftPlan } from "@/lib/draft-storage";
 
 export default function PatientReceitasPage() {
   const params = useParams();
   const router = useRouter();
   const patientId = typeof params.patientId === "string" ? params.patientId : "";
   const { patients, loading } = useSupabasePatients();
-  const { plans, loading: plansLoading } = useSupabaseDietPlans();
+  const { plans, loading: plansLoading, fetchPlanById } = useSupabaseDietPlans();
   const patient = patients.find((p) => p.id === patientId);
-  const linkedPlans = patient ? getPlansLinkedToPatient(patient.id, plans) : [];
+  const linkedPlans = React.useMemo(
+    () => (patient ? getPlansLinkedToPatient(patient.id, plans) : []),
+    [patient?.id, plans],
+  );
   const publishedPlan = patient ? getPublishedPlanForPatient(patient.id, plans) : null;
+  const [resolvedLinkedPlans, setResolvedLinkedPlans] = React.useState<DraftPlan[] | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!linkedPlans.length) {
+      setResolvedLinkedPlans([]);
+      return;
+    }
+    void ensureFullDietPlans(linkedPlans, fetchPlanById).then((full) => {
+      if (!cancelled) setResolvedLinkedPlans(full);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedPlans, fetchPlanById]);
+
+  const plansForRecipes = resolvedLinkedPlans ?? linkedPlans;
+
   const recipes = React.useMemo(() => {
-    const out = linkedPlans.flatMap((plan) =>
+    const out = plansForRecipes.flatMap((plan) =>
       buildRecipesFromPlan(plan).map((r) => ({
         ...r,
         sourcePlanId: plan.id,
@@ -30,7 +53,7 @@ export default function PatientReceitasPage() {
       })),
     );
     return out;
-  }, [linkedPlans]);
+  }, [plansForRecipes]);
 
   const addRecipeHref = publishedPlan ? `/diet-plans/${publishedPlan.id}/edit` : `/diet-plans/new?patientId=${encodeURIComponent(patientId)}`;
 
