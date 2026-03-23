@@ -3,6 +3,36 @@ export type PatientClinicalStatus = "active" | "paused" | "archived";
 
 /** Sexo para ficha clínica (opcional). */
 export type PatientSex = "female" | "male" | "other" | "unspecified";
+export type NutritionActivityLevel = "sedentary" | "light" | "moderate" | "intense";
+export type NutritionGoal = "weight_loss" | "maintenance" | "muscle_gain";
+export type MetabolicFormula = "mifflin_st_jeor" | "harris_benedict" | "henry_rees" | "cunningham";
+
+export type MacroSplitMode = "hybrid" | "percent";
+export type MealDistributionMode = "auto" | "manual";
+export type MealDistributionItem = {
+  mealId: string;
+  percent: number;
+};
+
+export type PlanNutritionProfile = {
+  sex: PatientSex | null;
+  ageYears: number | null;
+  weightKg: number | null;
+  heightCm: number | null;
+  activityLevel: NutritionActivityLevel | null;
+  goal: NutritionGoal | null;
+  formula: MetabolicFormula;
+  adjustmentPercent: number;
+  macroMode: MacroSplitMode;
+  proteinGPerKg: number;
+  fatPercent: number;
+  fatGPerKg: number;
+  carbsPercent: number;
+  manualTargetKcal: number | null;
+  leanMassKg: number | null;
+  mealDistributionMode: MealDistributionMode;
+  mealDistribution: MealDistributionItem[];
+};
 
 export type DraftPatient = {
   id: string;
@@ -21,6 +51,10 @@ export type DraftPatient = {
   /** Data de nascimento (YYYY-MM-DD). */
   birthDate?: string | null;
   sex?: PatientSex | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  activityLevel?: NutritionActivityLevel | null;
+  nutritionGoal?: NutritionGoal | null;
   /** Acesso ao app do paciente. */
   portalAccessActive?: boolean;
   portalCanDietPlan?: boolean;
@@ -126,6 +160,7 @@ export type DraftPlan = {
    * Preenchido a partir de `published_structure_json` quando status = published.
    */
   portalMeals?: DraftPlanMeal[] | null;
+  nutritionProfile?: PlanNutritionProfile;
 };
 
 const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade", "porção"];
@@ -178,6 +213,20 @@ function parseSex(raw: unknown): PatientSex | null | undefined {
   return undefined;
 }
 
+function parseActivity(raw: unknown): NutritionActivityLevel | null | undefined {
+  if (raw === null || raw === undefined || raw === "") return raw === null ? null : undefined;
+  const s = String(raw);
+  if (s === "sedentary" || s === "light" || s === "moderate" || s === "intense") return s;
+  return undefined;
+}
+
+function parseGoal(raw: unknown): NutritionGoal | null | undefined {
+  if (raw === null || raw === undefined || raw === "") return raw === null ? null : undefined;
+  const s = String(raw);
+  if (s === "weight_loss" || s === "maintenance" || s === "muscle_gain") return s;
+  return undefined;
+}
+
 export function normalizeDraftPatient(raw: unknown): DraftPatient {
   if (!raw || typeof raw !== "object") {
     return {
@@ -202,6 +251,13 @@ export function normalizeDraftPatient(raw: unknown): DraftPatient {
   const clinicalStatus: PatientClinicalStatus =
     status === "paused" || status === "archived" || status === "active" ? status : "active";
   const sex = parseSex(o.sex);
+  const activityLevel = parseActivity(o.activityLevel);
+  const nutritionGoal = parseGoal(o.nutritionGoal);
+  const toNum = (v: unknown): number | null | undefined => {
+    if (v === null || v === undefined || v === "") return v === null ? null : undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
   return {
     id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
     name: typeof o.name === "string" ? o.name : "",
@@ -213,11 +269,86 @@ export function normalizeDraftPatient(raw: unknown): DraftPatient {
     phone: typeof o.phone === "string" ? o.phone : "",
     birthDate: typeof o.birthDate === "string" ? o.birthDate : null,
     sex: sex === undefined ? null : sex,
+    weightKg: toNum(o.weightKg) ?? null,
+    heightCm: toNum(o.heightCm) ?? null,
+    activityLevel: activityLevel === undefined ? null : activityLevel,
+    nutritionGoal: nutritionGoal === undefined ? null : nutritionGoal,
     portalAccessActive: typeof o.portalAccessActive === "boolean" ? o.portalAccessActive : true,
     portalCanDietPlan: typeof o.portalCanDietPlan === "boolean" ? o.portalCanDietPlan : true,
     portalCanRecipes: typeof o.portalCanRecipes === "boolean" ? o.portalCanRecipes : true,
     portalCanMaterials: typeof o.portalCanMaterials === "boolean" ? o.portalCanMaterials : true,
     portalCanShopping: typeof o.portalCanShopping === "boolean" ? o.portalCanShopping : true,
+  };
+}
+
+function normalizeNutritionProfile(raw: unknown): PlanNutritionProfile {
+  const base: PlanNutritionProfile = {
+    sex: null,
+    ageYears: null,
+    weightKg: null,
+    heightCm: null,
+    activityLevel: null,
+    goal: "maintenance",
+    formula: "mifflin_st_jeor",
+    adjustmentPercent: 0,
+    macroMode: "hybrid",
+    proteinGPerKg: 1.6,
+    fatPercent: 30,
+    fatGPerKg: 0.8,
+    carbsPercent: 45,
+    manualTargetKcal: null,
+    leanMassKg: null,
+    mealDistributionMode: "auto",
+    mealDistribution: [],
+  };
+  if (!raw || typeof raw !== "object") return base;
+  const o = raw as Record<string, unknown>;
+  const sex = parseSex(o.sex);
+  const activity = parseActivity(o.activityLevel);
+  const goal = parseGoal(o.goal);
+  const numOrNull = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const formulaRaw = o.formula;
+  const formula: MetabolicFormula =
+    formulaRaw === "harris_benedict" || formulaRaw === "henry_rees" || formulaRaw === "cunningham"
+      ? formulaRaw
+      : "mifflin_st_jeor";
+  const macroModeRaw = o.macroMode;
+  const macroMode: MacroSplitMode = macroModeRaw === "percent" ? "percent" : "hybrid";
+  const mealDistributionMode = o.mealDistributionMode === "manual" ? "manual" : "auto";
+  const mealDistribution = Array.isArray(o.mealDistribution)
+    ? o.mealDistribution
+        .map((x) => {
+          if (!x || typeof x !== "object") return null;
+          const i = x as Record<string, unknown>;
+          const mealId = typeof i.mealId === "string" ? i.mealId.trim() : "";
+          const percent = Number(i.percent);
+          if (!mealId || !Number.isFinite(percent)) return null;
+          return { mealId, percent };
+        })
+        .filter(Boolean) as MealDistributionItem[]
+    : [];
+  return {
+    sex: sex === undefined ? null : sex,
+    ageYears: numOrNull(o.ageYears),
+    weightKg: numOrNull(o.weightKg),
+    heightCm: numOrNull(o.heightCm),
+    activityLevel: activity === undefined ? null : activity,
+    goal: goal === undefined ? "maintenance" : goal,
+    formula,
+    adjustmentPercent: numOrNull(o.adjustmentPercent) ?? 0,
+    macroMode,
+    proteinGPerKg: numOrNull(o.proteinGPerKg) ?? 1.6,
+    fatPercent: numOrNull(o.fatPercent) ?? 30,
+    fatGPerKg: numOrNull(o.fatGPerKg) ?? 0.8,
+    carbsPercent: numOrNull(o.carbsPercent) ?? 45,
+    manualTargetKcal: numOrNull(o.manualTargetKcal),
+    leanMassKg: numOrNull(o.leanMassKg),
+    mealDistributionMode,
+    mealDistribution,
   };
 }
 
@@ -374,6 +505,7 @@ export function normalizePlan(raw: unknown): DraftPlan {
       meals: [createEmptyMeal("Café da manhã", 0)],
       revisionHistory: [],
       currentVersionNumber: 1,
+      nutritionProfile: normalizeNutritionProfile(null),
     };
   }
   const o = raw as Record<string, unknown>;
@@ -406,6 +538,7 @@ export function normalizePlan(raw: unknown): DraftPlan {
       ? { publishedAt: o.publishedAt === null ? null : (o.publishedAt as string) }
       : {}),
     ...(Array.isArray(o.portalMeals) ? { portalMeals: o.portalMeals.map((m, i) => normalizeMeal(m, i)) } : {}),
+    nutritionProfile: normalizeNutritionProfile(o.nutritionProfile),
   };
 }
 

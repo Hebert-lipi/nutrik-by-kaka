@@ -27,9 +27,12 @@ import { PlanPreviewModal } from "./plan-preview-modal";
 import { PlanBuilderContextStrip } from "./plan-builder-context-strip";
 import { PlanNutritionSummary } from "./plan-nutrition-summary";
 import { BuilderFeedbackBanner, type BuilderFeedback } from "./builder-feedback-banner";
+import { NutritionIntelligencePanel } from "./nutrition-intelligence-panel";
 import { fetchPlanVersions, type DietPlanVersionRow } from "@/lib/supabase/plan-versions";
+import { profileFromPatient, usePlanNutritionEngine } from "@/hooks/use-plan-nutrition-engine";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
+const FALLBACK_PLAN_FOR_HOOKS = normalizePlan({});
 
 function trimPlanForPersistence(plan: DraftPlan): DraftPlan {
   return {
@@ -160,6 +163,27 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         : prev,
     );
   }, [mode, preloadPatientId, plan?.linkedPatientId, plan?.patientHeaderLabel, patients]);
+
+  React.useEffect(() => {
+    if (!plan) return;
+    if (plan.planKind !== "patient_plan" || !plan.linkedPatientId) return;
+    const patient = patients.find((p) => p.id === plan.linkedPatientId) ?? null;
+    if (!patient) return;
+    const base = profileFromPatient(patient);
+    const curr = plan.nutritionProfile ?? base;
+    const next = {
+      ...curr,
+      sex: curr.sex ?? base.sex,
+      ageYears: curr.ageYears ?? base.ageYears,
+      weightKg: curr.weightKg ?? base.weightKg,
+      heightCm: curr.heightCm ?? base.heightCm,
+      activityLevel: curr.activityLevel ?? base.activityLevel,
+      goal: curr.goal ?? base.goal,
+    };
+    const changed = JSON.stringify(curr) !== JSON.stringify(next);
+    if (!changed) return;
+    setPlan((prev) => (prev ? { ...prev, nutritionProfile: next } : prev));
+  }, [plan, patients]);
 
   React.useEffect(() => {
     if (mode !== "edit" || !plan?.id) {
@@ -308,6 +332,11 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     }
   };
 
+  const planForHooks = plan ?? FALLBACK_PLAN_FOR_HOOKS;
+  const linkedPatient = planForHooks.linkedPatientId ? patients.find((p) => p.id === planForHooks.linkedPatientId) ?? null : null;
+  const nutritionProfile = planForHooks.nutritionProfile ?? profileFromPatient(linkedPatient);
+  const { prescribed, engine, mealBreakdown, distributionSummary } = usePlanNutritionEngine({ ...planForHooks, nutritionProfile });
+
   if (!loaded || !plan) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-body14 font-semibold text-text-muted">Carregando…</div>
@@ -350,6 +379,12 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         <div className="flex flex-wrap gap-2">
           <Link href="/diet-plans" className={buttonClassName("outline", "md")}>
             Voltar
+          </Link>
+          <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("outline", "md")}>
+            Visualizar PDF
+          </Link>
+          <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("secondary", "md")}>
+            Baixar PDF
           </Link>
           <Button type="button" variant="outline" size="md" onClick={() => setPreviewOpen(true)}>
             Pré-visualizar
@@ -415,6 +450,16 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         lastRevisionSavedAt={lastPersistedRevisionAt}
         mode={mode}
         hasUnpublishedEdits={hasUnpublishedEdits}
+      />
+
+      <NutritionIntelligencePanel
+        patient={linkedPatient}
+        profile={nutritionProfile}
+        engine={engine}
+        prescribed={prescribed}
+        distributionSummary={distributionSummary}
+        mealBreakdown={mealBreakdown}
+        onProfileChange={(next) => updatePlan((p) => ({ ...p, nutritionProfile: next }))}
       />
 
       <PlanPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} plan={plan} patients={patients} />

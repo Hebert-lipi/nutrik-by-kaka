@@ -13,6 +13,8 @@ import { PlanMealsByPeriod } from "@/components/patient-portal/plan-meals-by-per
 import { Card, CardContent } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
+import { buildShoppingListFromPlan, groupShoppingByCategory } from "@/lib/clinical/shopping-list";
+import { fetchShoppingSnapshot } from "@/lib/supabase/shopping-lists";
 
 const POLL_MS = 22_000;
 
@@ -23,6 +25,7 @@ export default function MeuPlanoPage() {
   const [latestVersionAt, setLatestVersionAt] = React.useState<string | null>(null);
   const [ackAt, setAckAt] = React.useState<string | null>(null);
   const [refreshBusy, setRefreshBusy] = React.useState(false);
+  const [shoppingSnapshotItems, setShoppingSnapshotItems] = React.useState<ReturnType<typeof buildShoppingListFromPlan>>([]);
 
   const refreshVersionMeta = React.useCallback(async (patientId: string, planId: string) => {
     const [latest, ack] = await Promise.all([
@@ -150,6 +153,8 @@ export default function MeuPlanoPage() {
   }
 
   const { patient, plan } = portal;
+  const shoppingItemsFromPlan = buildShoppingListFromPlan(plan);
+  const groupedShopping = groupShoppingByCategory(shoppingSnapshotItems.length > 0 ? shoppingSnapshotItems : shoppingItemsFromPlan);
   const revisionFallback = getLastPlanRevisionAt(plan);
   const displayUpdatedIso = latestVersionAt ?? revisionFallback;
   const updatePending = Boolean(
@@ -169,6 +174,19 @@ export default function MeuPlanoPage() {
       setRefreshBusy(false);
     }
   };
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadSnapshot = async () => {
+      const snap = await fetchShoppingSnapshot(patient.id, plan.id, Math.max(1, plan.currentVersionNumber));
+      if (cancelled) return;
+      setShoppingSnapshotItems(snap?.items ?? []);
+    };
+    void loadSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id, plan.id, plan.currentVersionNumber]);
 
   return (
     <div className="space-y-8">
@@ -192,6 +210,37 @@ export default function MeuPlanoPage() {
           busy: refreshBusy,
         }}
       />
+
+      {patient.portalCanShopping !== false ? (
+        <Card className="border-neutral-200/70 bg-bg-0">
+          <CardContent className="space-y-4 py-5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-title16 font-semibold text-text-primary">Lista de compras</p>
+              <Chip tone="muted">Somente leitura</Chip>
+            </div>
+            {groupedShopping.length === 0 ? (
+              <p className="text-small12 text-text-secondary">
+                Sua nutricionista ainda não definiu itens suficientes para montar a lista de compras.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {groupedShopping.map((group) => (
+                  <section key={group.category} className="rounded-xl border border-neutral-200/70 bg-neutral-50/50 px-3 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">{group.category}</p>
+                    <ul className="mt-2 space-y-1 text-small12 text-text-secondary">
+                      {group.items.map((item) => (
+                        <li key={`${group.category}-${item.name}`}>
+                          <span className="font-semibold text-text-primary">{item.name}</span> — {item.quantityLabel}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

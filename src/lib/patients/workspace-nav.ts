@@ -3,6 +3,7 @@ export const PATIENT_WORKSPACE_TABS = [
   { segment: "", label: "Resumo" },
   { segment: "perfil", label: "Perfil" },
   { segment: "plano", label: "Plano alimentar" },
+  { segment: "avaliacoes", label: "Avaliações" },
   { segment: "diario", label: "Diário" },
   { segment: "receitas", label: "Receitas" },
   { segment: "materiais", label: "Materiais" },

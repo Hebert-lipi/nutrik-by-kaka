@@ -160,6 +160,58 @@ body {
   background: transparent !important;
 }
 
+.pdf-watermark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-watermark-image {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(410px, 70vw);
+  max-width: 70%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  opacity: 0.03;
+  filter: saturate(1.08);
+}
+
+.pdf-block-shell {
+  border-top: 2px solid #d2e2db;
+  border-left: 1px solid #e6eeea;
+  border-right: 1px solid #e6eeea;
+  border-bottom: 1px solid #e6eeea;
+  background: #fbfdfc;
+  border-radius: 10px;
+}
+
+.pdf-block-diet {
+  border-top-color: #a8ccbd;
+  border-left-color: #dce8e2;
+  border-right-color: #dce8e2;
+  border-bottom-color: #dce8e2;
+  background: #eef8f3;
+  padding-bottom: 1.15rem;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03), 0 8px 18px rgba(15, 23, 42, 0.035);
+}
+
+.pdf-block-shopping {
+  border-top-color: #d8dde8;
+  background: #f8fafd;
+}
+
+.pdf-block-recipes {
+  border-top-color: #e2dbc8;
+  background: #fcfaf4;
+  padding-bottom: 1rem;
+}
+
+.pdf-exporting .pdf-watermark {
+  display: none !important;
+}
+
 /* Impressão a partir da pré-visualização do plano (Construtor) */
 @media print {
   body[data-nutrik-printing-plan="true"] .nutrik-print-hide {
@@ -191,5 +243,171 @@ body {
 
   body[data-nutrik-printing-plan="true"] {
     background: white !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 12mm 15mm;
+  }
+
+  .pdf-screen-controls {
+    display: none !important;
+  }
+
+  body[data-nutrik-pdf-page="true"] * {
+    visibility: hidden !important;
+  }
+
+  body[data-nutrik-pdf-page="true"] #pdf-print-root,
+  body[data-nutrik-pdf-page="true"] #pdf-print-root * {
+    visibility: visible !important;
+  }
+
+  body[data-nutrik-pdf-page="true"] #pdf-print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: #fff !important;
+  }
+
+  .pdf-doc {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #111827 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .pdf-avoid-break {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .pdf-meal-block,
+  .pdf-meal-group,
+  .pdf-recipe-block {
+    display: block !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  .pdf-meal-block > div:first-child,
+  .pdf-recipe-block > p:first-child {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .pdf-meal-head,
+  .pdf-keep-with-next {
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+  }
+
+  .pdf-heading {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .pdf-section-recipes {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .pdf-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .pdf-page-counter::after {
+    content: "Página " counter(page) " de " attr(data-total-pages);
+  }
+
+  .pdf-page-counter-screen {
+    display: none !important;
+  }
+
+  .pdf-watermark {
+    z-index: 0 !important;
+    position: fixed !important;
+    inset: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .pdf-watermark-image {
+    left: 50% !important;
+    top: 50% !important;
+    width: min(420px, 72vw) !important;
+    max-width: 72% !important;
+    transform: translate(-50%, -50%) !important;
+    opacity: 0.07 !important;
+    filter: saturate(1.1) !important;
+  }
+
+  /* Ajuste fino de densidade só para impressão:
+   * preserva estética premium e reduz risco de quebra em blocos longos.
+   */
+  .pdf-doc {
+    font-size: 12.6px !important;
+    line-height: 1.62 !important;
+  }
+
+  .pdf-section-title {
+    font-size: 18.5px !important;
+    line-height: 1.24 !important;
+  }
+
+  .pdf-block-shell {
+    border-top-width: 2px !important;
+    border-top-color: #d2e2db !important;
+    border-left: 1px solid #e6eeea !important;
+    border-right: 1px solid #e6eeea !important;
+    border-bottom: 1px solid #e6eeea !important;
+    background: #fbfdfc !important;
+    border-radius: 8px !important;
+    padding-top: 0.68rem !important;
+    padding-bottom: 0.68rem !important;
+    -webkit-box-decoration-break: clone !important;
+    box-decoration-break: clone !important;
+  }
+
+  .pdf-block-diet {
+    border-top-color: #a8ccbd !important;
+    border-left-color: #dce8e2 !important;
+    border-right-color: #dce8e2 !important;
+    border-bottom-color: #dce8e2 !important;
+    background: #eef8f3 !important;
+    padding-bottom: 0.95rem !important;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02), 0 6px 14px rgba(15, 23, 42, 0.025) !important;
+  }
+
+  .pdf-block-shopping {
+    border-top-color: #d8dde8 !important;
+    background: #f8fafd !important;
+  }
+
+  .pdf-block-recipes {
+    border-top-color: #e2dbc8 !important;
+    background: #fcfaf4 !important;
+    padding-bottom: 0.9rem !important;
+  }
+
+  .pdf-meals-list {
+    gap: 1.45rem !important;
+    margin-top: 0.95rem !important;
+  }
+
+  .pdf-meal-block {
+    padding-top: 0.7rem !important;
+  }
+
+  .pdf-meal-groups {
+    gap: 0.54rem !important;
+    margin-top: 0.38rem !important;
   }
 }

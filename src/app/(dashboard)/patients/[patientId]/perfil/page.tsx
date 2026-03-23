@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Chip } from "@/components/ui/chip";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
-import type { PatientClinicalStatus, PatientSex } from "@/lib/draft-storage";
+import type { NutritionActivityLevel, NutritionGoal, PatientClinicalStatus, PatientSex } from "@/lib/draft-storage";
 import { formatPatientDateTime, patientAgeFromBirthDate } from "@/lib/patients/patient-display";
 
 const selectClass =
@@ -33,6 +33,10 @@ export default function PatientPerfilPage() {
   const [birthDate, setBirthDate] = React.useState("");
   const [sex, setSex] = React.useState<PatientSex | "">("");
   const [clinicalNotes, setClinicalNotes] = React.useState("");
+  const [weightKg, setWeightKg] = React.useState<string>("");
+  const [heightCm, setHeightCm] = React.useState<string>("");
+  const [activityLevel, setActivityLevel] = React.useState<NutritionActivityLevel | "">("");
+  const [nutritionGoal, setNutritionGoal] = React.useState<NutritionGoal | "">("");
   const [clinicalStatus, setClinicalStatus] = React.useState<PatientClinicalStatus>("active");
   const [portalAccessActive, setPortalAccessActive] = React.useState(true);
   const [portalCanDietPlan, setPortalCanDietPlan] = React.useState(true);
@@ -50,6 +54,10 @@ export default function PatientPerfilPage() {
     setBirthDate(patient.birthDate ?? "");
     setSex(patient.sex ?? "");
     setClinicalNotes(patient.clinicalNotes ?? "");
+    setWeightKg(patient.weightKg != null ? String(patient.weightKg) : "");
+    setHeightCm(patient.heightCm != null ? String(patient.heightCm) : "");
+    setActivityLevel(patient.activityLevel ?? "");
+    setNutritionGoal(patient.nutritionGoal ?? "");
     setClinicalStatus(patient.clinicalStatus ?? "active");
     setPortalAccessActive(patient.portalAccessActive !== false);
     setPortalCanDietPlan(patient.portalCanDietPlan !== false);
@@ -98,6 +106,10 @@ export default function PatientPerfilPage() {
         phone: phone.trim(),
         birthDate: birthDate.trim() || null,
         sex: sex === "" ? null : sex,
+        weightKg: weightKg.trim() === "" ? null : Number(weightKg),
+        heightCm: heightCm.trim() === "" ? null : Number(heightCm),
+        activityLevel: activityLevel === "" ? null : activityLevel,
+        nutritionGoal: nutritionGoal === "" ? null : nutritionGoal,
         clinicalNotes: clinicalNotes.trim(),
         clinicalStatus,
         portalAccessActive,
@@ -163,6 +175,31 @@ export default function PatientPerfilPage() {
               <option value="active">{STATUS_LABEL.active}</option>
               <option value="paused">{STATUS_LABEL.paused}</option>
               <option value="archived">{STATUS_LABEL.archived}</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <p className="mb-1 text-small12 font-bold uppercase tracking-wide text-text-muted">Base nutricional (motor de prescrição)</p>
+            <p className="text-small12 font-semibold text-text-secondary">Dados usados para TMB/GET no construtor de dieta. Pode ajustar por paciente.</p>
+          </div>
+          <Input label="Peso atual (kg)" type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+          <Input label="Altura (cm)" type="number" step="0.1" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+          <div className="space-y-2">
+            <label className="block text-small12 font-bold uppercase tracking-wide text-text-muted">Nível de atividade</label>
+            <select className={selectClass} value={activityLevel} onChange={(e) => setActivityLevel(e.target.value as NutritionActivityLevel | "")}>
+              <option value="">Selecione</option>
+              <option value="sedentary">Sedentário</option>
+              <option value="light">Leve</option>
+              <option value="moderate">Moderado</option>
+              <option value="intense">Intenso</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-small12 font-bold uppercase tracking-wide text-text-muted">Objetivo nutricional padrão</label>
+            <select className={selectClass} value={nutritionGoal} onChange={(e) => setNutritionGoal(e.target.value as NutritionGoal | "")}>
+              <option value="">Selecione</option>
+              <option value="weight_loss">Emagrecimento</option>
+              <option value="maintenance">Manutenção</option>
+              <option value="muscle_gain">Ganho de massa</option>
             </select>
           </div>
           <div id="observacoes" className="md:col-span-2 scroll-mt-28 space-y-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
+import type { DraftPatient, DraftPlan, NutritionGoal } from "@/lib/draft-storage";
 import { Chip } from "@/components/ui/chip";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,12 @@ function formatIso(iso: string | null | undefined) {
   } catch {
     return iso;
   }
+}
+
+function goalLabel(goal: NutritionGoal | null | undefined): string {
+  if (goal === "weight_loss") return "Emagrecimento";
+  if (goal === "muscle_gain") return "Ganho de massa";
+  return "Manutenção";
 }
 
 export function PlanBuilderContextStrip({
@@ -67,6 +73,9 @@ export function PlanBuilderContextStrip({
             </span>
           </p>
         ) : null}
+        <p className="mt-0.5 text-small12 font-semibold text-text-secondary">
+          Objetivo: <span className="font-bold text-text-primary">{goalLabel(plan.nutritionProfile?.goal)}</span>
+        </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Vínculo rápido</p>

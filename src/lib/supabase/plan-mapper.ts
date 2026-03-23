@@ -1,4 +1,12 @@
-import type { DraftPatient, DraftPlan, PatientSex, PlanKind } from "@/lib/draft-storage";
+import type {
+  DraftPatient,
+  DraftPlan,
+  NutritionActivityLevel,
+  NutritionGoal,
+  PatientSex,
+  PlanKind,
+  PlanNutritionProfile,
+} from "@/lib/draft-storage";
 import { normalizePlan, type DraftPlanRevisionSnapshot, type DraftPlanMeal } from "@/lib/draft-storage";
 
 /** Conteúdo clínico persistido em `diet_plans.structure_json`. */
@@ -13,6 +21,7 @@ export type DietPlanStructureJson = {
   /** Quando `patient_id` na linha é null (ex.: cópia aguardando vínculo), preserva tipo no editor. */
   planKind?: PlanKind;
   linkedPatientId?: string | null;
+  nutritionProfile?: PlanNutritionProfile;
 };
 
 export type DietPlanRow = {
@@ -48,11 +57,27 @@ export type PatientRow = {
   portal_can_recipes?: boolean;
   portal_can_materials?: boolean;
   portal_can_shopping?: boolean;
+  weight_kg?: number | null;
+  height_cm?: number | null;
+  activity_level?: string | null;
+  nutrition_goal?: string | null;
 };
 
 function mapSex(raw: string | null | undefined): PatientSex | null {
   if (!raw) return null;
   if (raw === "female" || raw === "male" || raw === "other" || raw === "unspecified") return raw;
+  return null;
+}
+
+function mapActivity(raw: string | null | undefined): NutritionActivityLevel | null {
+  if (!raw) return null;
+  if (raw === "sedentary" || raw === "light" || raw === "moderate" || raw === "intense") return raw;
+  return null;
+}
+
+function mapGoal(raw: string | null | undefined): NutritionGoal | null {
+  if (!raw) return null;
+  if (raw === "weight_loss" || raw === "maintenance" || raw === "muscle_gain") return raw;
   return null;
 }
 
@@ -87,6 +112,7 @@ function asStructure(raw: unknown): DietPlanStructureJson {
     patientCount: Number.isFinite(Number(o.patientCount)) ? Math.max(0, Math.floor(Number(o.patientCount))) : undefined,
     planKind: structPlanKind,
     linkedPatientId: structLinked,
+    nutritionProfile: (o.nutritionProfile ?? undefined) as PlanNutritionProfile | undefined,
   };
 }
 
@@ -168,6 +194,7 @@ export function draftPlanToStructure(plan: DraftPlan): DietPlanStructureJson {
     patientCount: plan.patientCount,
     planKind: plan.planKind,
     linkedPatientId: plan.linkedPatientId,
+    nutritionProfile: plan.nutritionProfile,
   };
 }
 
@@ -189,5 +216,9 @@ export function patientRowToDraftPatient(row: PatientRow): DraftPatient {
     portalCanRecipes: row.portal_can_recipes !== false,
     portalCanMaterials: row.portal_can_materials !== false,
     portalCanShopping: row.portal_can_shopping !== false,
+    weightKg: Number.isFinite(Number(row.weight_kg)) ? Number(row.weight_kg) : null,
+    heightCm: Number.isFinite(Number(row.height_cm)) ? Number(row.height_cm) : null,
+    activityLevel: mapActivity(row.activity_level ?? null),
+    nutritionGoal: mapGoal(row.nutrition_goal ?? null),
   };
 }

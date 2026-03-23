@@ -36,6 +36,25 @@ export function cloneEntirePlan(plan: DraftPlan): DraftPlan {
     meals,
     revisionHistory: [],
     currentVersionNumber: 1,
+    nutritionProfile: {
+      sex: null,
+      ageYears: null,
+      weightKg: null,
+      heightCm: null,
+      activityLevel: null,
+      goal: "maintenance",
+      formula: "mifflin_st_jeor",
+      adjustmentPercent: 0,
+      macroMode: "hybrid",
+      proteinGPerKg: 1.6,
+      fatPercent: 30,
+      fatGPerKg: 0.8,
+      carbsPercent: 45,
+      manualTargetKcal: null,
+      leanMassKg: null,
+      mealDistributionMode: "auto",
+      mealDistribution: [],
+    },
   };
 }
 
@@ -87,6 +106,25 @@ export function createNewPlanSkeleton(opts?: NewPlanSkeletonOptions): DraftPlan 
     ],
     revisionHistory: [],
     currentVersionNumber: 1,
+    nutritionProfile: {
+      sex: null,
+      ageYears: null,
+      weightKg: null,
+      heightCm: null,
+      activityLevel: null,
+      goal: "maintenance",
+      formula: "mifflin_st_jeor",
+      adjustmentPercent: 0,
+      macroMode: "hybrid",
+      proteinGPerKg: 1.6,
+      fatPercent: 30,
+      fatGPerKg: 0.8,
+      carbsPercent: 45,
+      manualTargetKcal: null,
+      leanMassKg: null,
+      mealDistributionMode: "auto",
+      mealDistribution: [],
+    },
   };
 }
 

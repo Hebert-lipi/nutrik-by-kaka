@@ -244,6 +244,9 @@ export default function PatientResumoPage() {
           <Link href={`/patients/${patientId}/plano`} className={buttonClassName("secondary", "md", "h-11 w-full justify-center rounded-xl")}>
             Publicar / gerir plano
           </Link>
+          <Link href={`/patients/${patientId}/avaliacoes`} className={buttonClassName("secondary", "md", "h-11 w-full justify-center rounded-xl")}>
+            Avaliações clínicas
+          </Link>
           <Link href={`/patients/${patientId}/diario`} className={buttonClassName("outline", "md", "h-11 w-full justify-center rounded-xl")}>
             Abrir diário
           </Link>

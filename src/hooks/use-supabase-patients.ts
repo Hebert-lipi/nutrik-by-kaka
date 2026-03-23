@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { supabase } from "@/lib/supabaseClient";
-import type { DraftPatient, PatientClinicalStatus, PatientSex } from "@/lib/draft-storage";
+import type {
+  DraftPatient,
+  NutritionActivityLevel,
+  NutritionGoal,
+  PatientClinicalStatus,
+  PatientSex,
+} from "@/lib/draft-storage";
 import { patientRowToDraftPatient, type PatientRow } from "@/lib/supabase/plan-mapper";
 
 export type NewPatientWizardInput = {
@@ -11,6 +17,10 @@ export type NewPatientWizardInput = {
   phone: string;
   birthDate: string | null;
   sex: PatientSex | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  activityLevel?: NutritionActivityLevel | null;
+  nutritionGoal?: NutritionGoal | null;
   clinicalNotes: string;
   portalAccessActive: boolean;
   portalCanDietPlan: boolean;
@@ -25,6 +35,10 @@ export type PatientProfilePatch = Partial<{
   phone: string;
   birthDate: string | null;
   sex: PatientSex | null;
+  weightKg: number | null;
+  heightCm: number | null;
+  activityLevel: NutritionActivityLevel | null;
+  nutritionGoal: NutritionGoal | null;
   clinicalNotes: string;
   clinicalStatus: PatientClinicalStatus;
   portalAccessActive: boolean;
@@ -91,6 +105,10 @@ export function useSupabasePatients() {
               phone: input.phone.trim(),
               birth_date: input.birthDate || null,
               sex: input.sex,
+              weight_kg: input.weightKg,
+              height_cm: input.heightCm,
+              activity_level: input.activityLevel,
+              nutrition_goal: input.nutritionGoal,
               portal_access_active: input.portalAccessActive,
               portal_can_diet_plan: input.portalCanDietPlan,
               portal_can_recipes: input.portalCanRecipes,
@@ -116,6 +134,10 @@ export function useSupabasePatients() {
       if (patch.phone !== undefined) row.phone = patch.phone.trim();
       if (patch.birthDate !== undefined) row.birth_date = patch.birthDate || null;
       if (patch.sex !== undefined) row.sex = patch.sex;
+      if (patch.weightKg !== undefined) row.weight_kg = patch.weightKg;
+      if (patch.heightCm !== undefined) row.height_cm = patch.heightCm;
+      if (patch.activityLevel !== undefined) row.activity_level = patch.activityLevel;
+      if (patch.nutritionGoal !== undefined) row.nutrition_goal = patch.nutritionGoal;
       if (patch.portalAccessActive !== undefined) row.portal_access_active = patch.portalAccessActive;
       if (patch.portalCanDietPlan !== undefined) row.portal_can_diet_plan = patch.portalCanDietPlan;
       if (patch.portalCanRecipes !== undefined) row.portal_can_recipes = patch.portalCanRecipes;
