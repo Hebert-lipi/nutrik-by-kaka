@@ -7,7 +7,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
  * Regras:
  * - `isPatient`: existe linha em `patients` com `auth_user_id = user.id` (após claim por e-mail).
  * - `isNutritionist`: existe paciente ou plano com `nutritionist_user_id = user.id`.
- * - Se ambos: prioridade de rotas no middleware favorece o workspace nutricionista (área interna liberada; `/meu-plano` bloqueado).
+ * - Se ambos: área interna liberada e `/meu-plano` também (plano da ficha onde `auth_user_id` = user).
  */
 export type UserAccessContext = {
   user: User;

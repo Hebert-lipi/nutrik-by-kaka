@@ -66,7 +66,9 @@ export async function middleware(request: NextRequest) {
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
-  if (ctx.isNutritionist && pathname.startsWith("/meu-plano")) {
+  // Nutricionista sem ficha de paciente vinculada: portal não se aplica (evita confusão).
+  // Quem é nutri E paciente pode abrir /meu-plano para ver o plano publicado da própria ficha.
+  if (ctx.isNutritionist && !ctx.isPatient && pathname.startsWith("/meu-plano")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));

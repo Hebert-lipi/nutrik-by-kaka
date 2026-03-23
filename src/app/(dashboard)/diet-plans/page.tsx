@@ -46,7 +46,7 @@ export default function DietPlansPage() {
       <PageHeader
         eyebrow="Biblioteca"
         title="Planos alimentares"
-        description="Planos salvos no Supabase. Publique para liberar ao paciente vinculado em /meu-plano."
+        description="Modelos reutilizáveis ou planos vinculados a um paciente. Só após publicar o paciente vê o cardápio no app."
       />
 
       {error || listError ? (
@@ -55,8 +55,8 @@ export default function DietPlansPage() {
         </p>
       ) : null}
 
-      <Card>
-        <CardContent className="space-y-6 pt-6">
+      <Card className="min-w-0 max-w-full">
+        <CardContent className="min-w-0 max-w-full space-y-6 pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-yellow/18 ring-1 ring-yellow/25">
@@ -65,7 +65,7 @@ export default function DietPlansPage() {
               <div>
                 <p className="text-h4 font-semibold tracking-tight text-text-primary">Biblioteca de planos</p>
                 <p className="mt-1 max-w-2xl text-body14 leading-relaxed text-text-secondary">
-                  Cada plano pode incluir várias refeições e itens. Abra o construtor para ver e editar a estrutura completa.
+                  Ao criar, você escolhe se é um modelo da biblioteca ou um plano para um paciente específico. Edições em planos já publicados ficam em rascunho até você publicar de novo.
                 </p>
               </div>
             </div>
@@ -99,8 +99,8 @@ export default function DietPlansPage() {
                     <TableCell colSpan={6} className="border-0 p-5 md:p-8">
                       <EmptyState
                         title="Nenhum plano na biblioteca"
-                        description="Abra o construtor para montar refeições e alimentos como em um app profissional de nutrição."
-                        action={{ label: "Criar plano", onClick: () => router.push("/diet-plans/new") }}
+                        description="Comece por um modelo reutilizável ou por um plano já ligado a um paciente. Você define isso no primeiro passo, antes do construtor."
+                        action={{ label: "Criar novo plano", onClick: () => router.push("/diet-plans/new") }}
                       />
                       <div className="mt-6 flex flex-wrap items-center justify-center gap-2 border-t border-neutral-100/90 pt-5">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Status</span>
@@ -148,7 +148,7 @@ export default function DietPlansPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex flex-wrap justify-end gap-2">
+                        <div className="flex min-w-[280px] flex-nowrap justify-end gap-1.5 sm:min-w-0 sm:flex-wrap sm:gap-2">
                           <Link href={`/diet-plans/${pl.id}/edit`} className={buttonClassName("outline", "sm", "rounded-full")}>
                             Editar
                           </Link>

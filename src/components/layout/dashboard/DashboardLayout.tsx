@@ -41,10 +41,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar title={finalTitle} currentPath={pathname} compactTitle={compactTopbarTitle} />
-        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
           <div
             className={cn(
-              "mx-auto w-full max-w-6xl px-3 pt-4 md:px-5 md:pt-5",
+              "mx-auto w-full min-w-0 max-w-6xl px-3 pt-4 md:px-5 md:pt-5",
               isPlanBuilderRoute ? "pb-5 md:pb-6" : "pb-8 md:pb-9",
             )}
           >

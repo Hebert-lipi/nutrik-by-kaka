@@ -23,6 +23,8 @@ export type DietPlanRow = {
   description: string;
   status: "draft" | "published";
   structure_json: DietPlanStructureJson | Record<string, unknown>;
+  /** Snapshot servido ao paciente (portal) quando publicado; rascunho em `structure_json`. */
+  published_structure_json?: DietPlanStructureJson | Record<string, unknown> | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -88,6 +90,15 @@ function asStructure(raw: unknown): DietPlanStructureJson {
   };
 }
 
+function portalMealsFromRow(row: DietPlanRow): DraftPlan["portalMeals"] {
+  if (row.status !== "published") return null;
+  const raw = row.published_structure_json;
+  if (!raw || typeof raw !== "object") return null;
+  const snap = asStructure(raw);
+  return snap.meals?.length ? snap.meals : null;
+}
+
+/** Plano para edição na área da nutricionista (`structure_json` = rascunho em curso). */
 export function dietPlanRowToDraftPlan(row: DietPlanRow): DraftPlan {
   const s = asStructure(row.structure_json);
   const rowPatientId = row.patient_id;
@@ -107,6 +118,8 @@ export function dietPlanRowToDraftPlan(row: DietPlanRow): DraftPlan {
         ? "patient_plan"
         : "template";
 
+  const portalMeals = portalMealsFromRow(row);
+
   return normalizePlan({
     id: row.id,
     name: row.title,
@@ -122,6 +135,25 @@ export function dietPlanRowToDraftPlan(row: DietPlanRow): DraftPlan {
     revisionHistory: s.revisionHistory,
     currentVersionNumber: s.currentVersionNumber,
     publishedAt: row.published_at,
+    ...(portalMeals ? { portalMeals } : {}),
+  });
+}
+
+/**
+ * Plano como o paciente vê no portal: snapshot publicado ou, em legado, `structure_json`.
+ */
+export function dietPlanRowToDraftPlanForPortal(row: DietPlanRow): DraftPlan {
+  const useSnapshot =
+    row.status === "published" && row.published_structure_json && typeof row.published_structure_json === "object";
+  const s = asStructure(useSnapshot ? row.published_structure_json : row.structure_json);
+  const base = dietPlanRowToDraftPlan(row);
+  const { portalMeals: _p, ...baseRest } = base;
+  return normalizePlan({
+    ...baseRest,
+    meals: s.meals.length ? s.meals : base.meals,
+    professionalName: s.professionalName || base.professionalName,
+    professionalRegistration: s.professionalRegistration || base.professionalRegistration,
+    patientHeaderLabel: s.patientHeaderLabel || base.patientHeaderLabel,
   });
 }
 

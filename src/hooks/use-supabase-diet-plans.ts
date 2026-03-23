@@ -11,6 +11,8 @@ import {
 } from "@/lib/supabase/plan-mapper";
 import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
 
+export type SavePlanFromBuilderMode = "draft" | "publish";
+
 export function useSupabaseDietPlans() {
   const [plans, setPlans] = React.useState<DraftPlan[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -67,44 +69,9 @@ export function useSupabaseDietPlans() {
         publishedAt = prev ?? new Date().toISOString();
       }
 
-      const row = {
-        id: normalized.id,
-        nutritionist_user_id: userData.user.id,
-        patient_id: patientId,
-        title: normalized.name.trim(),
-        description: normalized.description.trim(),
-        status: normalized.status,
-        structure_json: draftPlanToStructure(normalized),
-        published_at: publishedAt,
-      };
-
-      const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
-      if (upErr) throw new Error(upErr.message);
-      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
-      await refresh();
-    },
-    [refresh],
-  );
-
-  /**
-   * Persistência do construtor após revisão — mantém published_at se o plano já estava publicado.
-   */
-  const savePlanFromBuilder = React.useCallback(
-    async (plan: DraftPlan) => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData.user) throw new Error(userErr?.message ?? "Não autenticado");
-
-      const normalized = normalizePlan(plan);
-      const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
-
-      let publishedAt: string | null = null;
+      let publishedStructureForRow: unknown = null;
       if (normalized.status === "published") {
-        const { data: existing } = await supabase.from("diet_plans").select("published_at").eq("id", plan.id).maybeSingle();
-        const prev =
-          existing && typeof (existing as { published_at?: string | null }).published_at === "string"
-            ? (existing as { published_at: string }).published_at
-            : null;
-        publishedAt = prev ?? new Date().toISOString();
+        publishedStructureForRow = draftPlanToStructure(normalized);
       }
 
       const row = {
@@ -116,11 +83,103 @@ export function useSupabaseDietPlans() {
         status: normalized.status,
         structure_json: draftPlanToStructure(normalized),
         published_at: publishedAt,
+        published_structure_json: publishedStructureForRow,
       };
 
       const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
       if (upErr) throw new Error(upErr.message);
       await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
+      await refresh();
+    },
+    [refresh],
+  );
+
+  /**
+   * `draft`: grava rascunho. Se o plano já estava publicado, mantém o snapshot do paciente até um `publish`.
+   * `publish`: atualiza conteúdo, grava snapshot publicado e (plano de paciente) chama a RPC de publicação.
+   */
+  const savePlanFromBuilder = React.useCallback(
+    async (plan: DraftPlan, mode: SavePlanFromBuilderMode = "draft") => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) throw new Error(userErr?.message ?? "Não autenticado");
+
+      const normalized = normalizePlan(plan);
+      const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
+      const structure = draftPlanToStructure(normalized);
+
+      const { data: existing } = await supabase
+        .from("diet_plans")
+        .select("published_at,status,published_structure_json,structure_json")
+        .eq("id", plan.id)
+        .maybeSingle();
+
+      const ex = existing as
+        | {
+            published_at?: string | null;
+            status?: string;
+            published_structure_json?: unknown;
+            structure_json?: unknown;
+          }
+        | null;
+
+      let rowStatus: "draft" | "published";
+      let publishedAt: string | null = null;
+      let publishedStructureJson: unknown = null;
+
+      if (mode === "publish") {
+        rowStatus = "published";
+        publishedAt =
+          typeof ex?.published_at === "string" && ex.published_at ? ex.published_at : new Date().toISOString();
+        publishedStructureJson = structure;
+      } else if (normalized.status === "draft") {
+        rowStatus = "draft";
+        publishedAt = null;
+        publishedStructureJson = null;
+      } else if (ex?.status === "published" && normalized.status === "published") {
+        rowStatus = "published";
+        publishedAt = typeof ex.published_at === "string" ? ex.published_at : new Date().toISOString();
+        publishedStructureJson =
+          ex.published_structure_json !== undefined && ex.published_structure_json !== null
+            ? ex.published_structure_json
+            : ex.structure_json ?? structure;
+      } else {
+        rowStatus = normalized.status;
+        publishedAt =
+          normalized.status === "published"
+            ? typeof ex?.published_at === "string" && ex.published_at
+              ? ex.published_at
+              : new Date().toISOString()
+            : null;
+        publishedStructureJson = normalized.status === "published" ? structure : null;
+      }
+
+      const row = {
+        id: normalized.id,
+        nutritionist_user_id: userData.user.id,
+        patient_id: patientId,
+        title: normalized.name.trim(),
+        description: normalized.description.trim(),
+        status: rowStatus,
+        structure_json: structure,
+        published_at: publishedAt,
+        published_structure_json: publishedStructureJson,
+      };
+
+      const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
+      if (upErr) throw new Error(upErr.message);
+
+      if (mode === "publish" && normalized.planKind === "patient_plan" && patientId) {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc("publish_diet_plan_for_patient", {
+          p_plan_id: normalized.id,
+        });
+        if (rpcErr) throw new Error(rpcErr.message);
+        const payload = rpcData as { ok?: boolean; error?: string } | null;
+        if (!payload?.ok) {
+          throw new Error("Não foi possível publicar o plano para o paciente.");
+        }
+      }
+
+      await insertDietPlanVersion(normalized.id, structure, userData.user.id);
       await refresh();
     },
     [refresh],
@@ -177,11 +236,13 @@ export function useSupabaseDietPlans() {
             throw new Error(msg);
           }
         } else {
+          const { data: rowSnap } = await supabase.from("diet_plans").select("structure_json").eq("id", id).maybeSingle();
           const { error: upErr } = await supabase
             .from("diet_plans")
             .update({
               status: "published",
               published_at: new Date().toISOString(),
+              published_structure_json: rowSnap?.structure_json ?? null,
             })
             .eq("id", id);
           if (upErr) throw new Error(upErr.message);
@@ -192,6 +253,7 @@ export function useSupabaseDietPlans() {
           .update({
             status: "draft",
             published_at: null,
+            published_structure_json: null,
           })
           .eq("id", id);
         if (upErr) throw new Error(upErr.message);

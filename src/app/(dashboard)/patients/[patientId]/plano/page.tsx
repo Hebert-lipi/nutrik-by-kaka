@@ -10,7 +10,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
 import { useSupabaseDietPlans } from "@/hooks/use-supabase-diet-plans";
-import { getPublishedPlanForPatient, getLastPlanRevisionAt, getPlansLinkedToPatient } from "@/lib/clinical/patient-plan";
+import {
+  getPatientFacingMeals,
+  getPublishedPlanForPatient,
+  getLastPlanRevisionAt,
+  getPlansLinkedToPatient,
+} from "@/lib/clinical/patient-plan";
 import { cloneEntirePlan } from "@/lib/diet-plan-factory";
 import { formatPatientDateTime } from "@/lib/patients/patient-display";
 import type { DraftPlan } from "@/lib/draft-storage";
@@ -288,10 +293,10 @@ export default function PatientPlanoModulePage() {
           <>
             <div className="flex flex-wrap gap-2">
               <Chip tone="success">Publicado</Chip>
-              <Chip tone="muted">{published.meals.length} refeições</Chip>
+              <Chip tone="muted">{getPatientFacingMeals(published).length} refeições</Chip>
             </div>
             <PlanMealsByPeriod
-              meals={published.meals}
+              meals={getPatientFacingMeals(published)}
               planName={published.name}
               subtitle="Como em /meu-plano"
               lastUpdatedIso={lastAt}

@@ -26,6 +26,7 @@ import { MealSection } from "./meal-section";
 import { PlanPreviewModal } from "./plan-preview-modal";
 import { PlanBuilderContextStrip } from "./plan-builder-context-strip";
 import { PlanNutritionSummary } from "./plan-nutrition-summary";
+import { BuilderFeedbackBanner, type BuilderFeedback } from "./builder-feedback-banner";
 import { fetchPlanVersions, type DietPlanVersionRow } from "@/lib/supabase/plan-versions";
 
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
@@ -73,6 +74,13 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preloadPatientId = searchParams.get("patientId");
+  /** `kind=template` força modelo; `kind=patient` ou só `patientId` = plano atribuído. */
+  const intentKind: "template" | "patient" =
+    searchParams.get("kind") === "template"
+      ? "template"
+      : searchParams.get("kind") === "patient" || Boolean(preloadPatientId?.trim())
+        ? "patient"
+        : "template";
   const { patients } = useSupabasePatients();
   const { fetchPlanById, savePlanFromBuilder, upsertPlan } = useSupabaseDietPlans();
   const [plan, setPlan] = React.useState<DraftPlan | null>(null);
@@ -89,6 +97,8 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const [versionsLoading, setVersionsLoading] = React.useState(false);
   const [versionsError, setVersionsError] = React.useState<string | null>(null);
   const [versionListKey, setVersionListKey] = React.useState(0);
+  const [savingMode, setSavingMode] = React.useState<null | "draft" | "publish">(null);
+  const [feedback, setFeedback] = React.useState<BuilderFeedback | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -107,11 +117,13 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   React.useEffect(() => {
     if (mode === "new") {
       setNotFound(false);
-      setPlan(
-        createNewPlanSkeleton(
-          preloadPatientId ? { linkedPatientId: preloadPatientId } : undefined,
-        ),
-      );
+      if (intentKind === "template") {
+        setPlan(createNewPlanSkeleton());
+      } else if (preloadPatientId?.trim()) {
+        setPlan(createNewPlanSkeleton({ linkedPatientId: preloadPatientId.trim() }));
+      } else {
+        setPlan(createNewPlanSkeleton());
+      }
       setLoaded(true);
       return;
     }
@@ -134,7 +146,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         cancelled = true;
       };
     }
-  }, [mode, planId, fetchPlanById, preloadPatientId]);
+  }, [mode, planId, fetchPlanById, preloadPatientId, intentKind]);
 
   /** Preenche o cabeçalho com o nome do paciente quando a lista carrega após abrir com ?patientId=. */
   React.useEffect(() => {
@@ -189,46 +201,99 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     }));
   };
 
-  const persist = async (statusOverride?: DraftPlan["status"]) => {
-    if (!plan) return;
-    const name = plan.name.trim();
-    if (!name) {
-      setSaveError("Informe o nome do plano para salvar.");
-      return;
-    }
-    const nextStatus = statusOverride ?? plan.status;
-    if (plan.planKind === "patient_plan" && !plan.linkedPatientId && nextStatus === "published") {
-      setSaveError("Selecione um paciente antes de publicar.");
-      return;
-    }
-
+  function buildNextPersistedPlan(statusForRevision: DraftPlan["status"]): DraftPlan {
+    if (!plan) throw new Error("Plano inválido");
     const trimmed = trimPlanForPersistence({
       ...plan,
-      status: nextStatus,
+      status: statusForRevision,
       patientCount:
         plan.planKind === "patient_plan" && plan.linkedPatientId ? 1 : Math.max(0, Math.floor(plan.patientCount || 0)),
     });
-
     const snapshot = snapshotPlanForHistory(trimmed, plan.currentVersionNumber, {
       changedByLabel: revisionAuthorLabel,
       changedByUserId: revisionAuthorUserId,
     });
-    const toSave = normalizePlan({
+    return normalizePlan({
       ...trimmed,
       revisionHistory: [...plan.revisionHistory, snapshot].slice(-120),
       currentVersionNumber: plan.currentVersionNumber + 1,
     });
+  }
 
+  const saveDraft = async () => {
+    if (!plan || savingMode) return;
+    const name = plan.name.trim();
+    if (!name) {
+      setSaveError("Dê um nome ao plano para salvar o rascunho.");
+      return;
+    }
+    setSaveError(null);
+    setSavingMode("draft");
     try {
-      await savePlanFromBuilder(toSave);
-      setPlan(toSave);
+      const toSave = buildNextPersistedPlan(plan.status);
+      await savePlanFromBuilder(toSave, "draft");
+      const fresh = await fetchPlanById(toSave.id);
+      if (fresh) setPlan(fresh);
       setVersionListKey((k) => k + 1);
       setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-      if (mode === "new") {
-        router.replace(`/diet-plans/${toSave.id}/edit`);
-      }
+      if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
+      setFeedback({
+        tone: "success",
+        title: "Rascunho salvo com sucesso",
+        body:
+          plan.planKind === "patient_plan"
+            ? "Seu plano foi salvo e ainda não está visível para o paciente."
+            : "Seu modelo foi salvo na biblioteca.",
+      });
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Erro ao salvar no Supabase.");
+      const msg = e instanceof Error ? e.message : "Não foi possível salvar o rascunho.";
+      setSaveError(msg);
+      setFeedback({ tone: "error", title: "Não foi possível salvar o rascunho.", body: msg });
+    } finally {
+      setSavingMode(null);
+    }
+  };
+
+  const publishPlan = async () => {
+    if (!plan || savingMode) return;
+    const name = plan.name.trim();
+    if (!name) {
+      setSaveError("Dê um nome ao plano antes de publicar.");
+      return;
+    }
+    if (plan.planKind === "patient_plan" && !plan.linkedPatientId) {
+      setSaveError("Selecione um paciente antes de publicar este plano.");
+      setFeedback({
+        tone: "error",
+        title: "Paciente obrigatório",
+        body: "Selecione um paciente antes de publicar este plano.",
+      });
+      return;
+    }
+    setSaveError(null);
+    setSavingMode("publish");
+    try {
+      const toSave = buildNextPersistedPlan("published");
+      await savePlanFromBuilder(toSave, "publish");
+      const fresh = await fetchPlanById(toSave.id);
+      if (fresh) setPlan(fresh);
+      setVersionListKey((k) => k + 1);
+      setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
+      setFeedback({
+        tone: "success",
+        title: "Plano publicado com sucesso",
+        body:
+          plan.planKind === "patient_plan"
+            ? "O plano já está disponível para o paciente."
+            : "O modelo está publicado na sua biblioteca.",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Não foi possível publicar o plano.";
+      setSaveError(msg);
+      setFeedback({ tone: "error", title: "Não foi possível publicar o plano.", body: msg });
+    } finally {
+      setSavingMode(null);
     }
   };
 
@@ -267,13 +332,20 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const lastPersistedRevisionAt =
     plan.revisionHistory.length > 0 ? plan.revisionHistory[plan.revisionHistory.length - 1]!.savedAt : null;
 
+  const hasUnpublishedEdits = Boolean(
+    plan.status === "published" &&
+      plan.portalMeals &&
+      plan.portalMeals.length > 0 &&
+      JSON.stringify(plan.meals) !== JSON.stringify(plan.portalMeals),
+  );
+
   return (
     <div className="flex min-h-0 flex-col gap-6 pb-4 md:gap-7">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <PageHeader
           eyebrow="Construtor clínico"
           title={mode === "new" ? "Novo plano alimentar" : "Editar plano alimentar"}
-          description="Monte a dieta, publique quando estiver pronta. Cada salvamento gera revisão com data/hora e autor — o paciente enxerga só a última versão publicada."
+          description="Use Salvar rascunho para guardar o trabalho. Publicar plano é o que libera o cardápio ao paciente (quando houver vínculo). Cada ação registra revisão com data e responsável."
         />
         <div className="flex flex-wrap gap-2">
           <Link href="/diet-plans" className={buttonClassName("outline", "md")}>
@@ -341,6 +413,8 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         plan={plan}
         patients={patients}
         lastRevisionSavedAt={lastPersistedRevisionAt}
+        mode={mode}
+        hasUnpublishedEdits={hasUnpublishedEdits}
       />
 
       <PlanPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} plan={plan} patients={patients} />
@@ -528,34 +602,48 @@ export function DietPlanBuilder({ mode, planId }: Props) {
 
       <Card className="border-neutral-200/55 bg-gradient-to-br from-neutral-50/30 to-bg-0 shadow-none">
         <CardContent className="flex flex-col gap-2 py-5 text-center sm:text-left">
-          <p className="text-title16 font-semibold text-text-primary">Pronto para liberar ao paciente?</p>
+          <p className="text-title16 font-semibold text-text-primary">Publicação</p>
           <p className="text-small12 leading-relaxed text-text-secondary">
-            Use <span className="font-bold text-text-primary">Publicar</span> quando a dieta estiver finalizada. Rascunhos ficam só na sua área; o portal do paciente mostra apenas a última versão publicada vinculada a ele.
+            <span className="font-bold text-text-primary">Salvar rascunho</span> grava o que você está editando. Em planos já publicados, o paciente continua vendo a versão anterior até você clicar em{" "}
+            <span className="font-bold text-text-primary">Publicar plano</span>.
           </p>
         </CardContent>
       </Card>
 
+      <BuilderFeedbackBanner feedback={feedback} onDismiss={() => setFeedback(null)} />
+
       <div className="sticky bottom-0 z-20 -mx-4 mt-2 border-t border-neutral-200/70 bg-bg-0/96 px-4 py-3 shadow-[0_-12px_40px_-20px_rgba(15,23,42,0.18)] backdrop-blur-lg md:-mx-6 md:px-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <p className="max-w-xl text-small12 font-semibold text-text-muted">
-            Salvar registra revisão com data/hora e autor (até 120 revisões neste dispositivo). Publicar não apaga versões anteriores.
+            {savingMode ? (
+              <span className="font-bold text-secondary">
+                {savingMode === "draft" ? "Salvando rascunho…" : "Publicando plano…"}
+              </span>
+            ) : (
+              <>Salvar rascunho e Publicar plano ficam com confirmação na tela. Aguarde o término antes de clicar de novo.</>
+            )}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <Button type="button" variant="outline" size="md" onClick={() => void persist("draft")}>
-              Salvar como rascunho
-            </Button>
-            <Button type="button" variant="secondary" size="md" onClick={() => void persist()}>
-              Salvar plano
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              disabled={Boolean(savingMode)}
+              aria-busy={savingMode === "draft"}
+              onClick={() => void saveDraft()}
+            >
+              {savingMode === "draft" ? "Salvando rascunho…" : "Salvar rascunho"}
             </Button>
             <Button
               type="button"
               variant="primary"
               size="md"
-              disabled={publishBlocked}
+              disabled={publishBlocked || Boolean(savingMode)}
+              aria-busy={savingMode === "publish"}
               title={publishBlocked ? "Selecione um paciente para publicar." : undefined}
-              onClick={() => void persist("published")}
+              onClick={() => void publishPlan()}
             >
-              Publicar plano
+              {savingMode === "publish" ? "Publicando plano…" : "Publicar plano"}
             </Button>
           </div>
         </div>

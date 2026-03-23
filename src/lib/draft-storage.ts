@@ -121,6 +121,11 @@ export type DraftPlan = {
   currentVersionNumber: number;
   /** Data/hora da última publicação no Supabase (só preenchido ao carregar da API). */
   publishedAt?: string | null;
+  /**
+   * Refeições (e metadados do snapshot) visíveis ao paciente enquanto a nutricionista edita rascunho.
+   * Preenchido a partir de `published_structure_json` quando status = published.
+   */
+  portalMeals?: DraftPlanMeal[] | null;
 };
 
 const UNITS: PlanFoodUnit[] = ["g", "ml", "unidade", "porção"];
@@ -400,6 +405,7 @@ export function normalizePlan(raw: unknown): DraftPlan {
     ...(typeof o.publishedAt === "string" || o.publishedAt === null
       ? { publishedAt: o.publishedAt === null ? null : (o.publishedAt as string) }
       : {}),
+    ...(Array.isArray(o.portalMeals) ? { portalMeals: o.portalMeals.map((m, i) => normalizeMeal(m, i)) } : {}),
   };
 }
 

@@ -1,6 +1,11 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
-import { dietPlanRowToDraftPlan, patientRowToDraftPatient, type DietPlanRow, type PatientRow } from "@/lib/supabase/plan-mapper";
+import {
+  dietPlanRowToDraftPlanForPortal,
+  patientRowToDraftPatient,
+  type DietPlanRow,
+  type PatientRow,
+} from "@/lib/supabase/plan-mapper";
 
 export type MyPlanResult =
   | { kind: "no_session" }
@@ -41,6 +46,6 @@ export async function loadPatientPortalState(userEmail: string | null | undefine
     return { kind: "linked_no_plan", patient };
   }
 
-  const plan = dietPlanRowToDraftPlan(planRows[0] as DietPlanRow);
+  const plan = dietPlanRowToDraftPlanForPortal(planRows[0] as DietPlanRow);
   return { kind: "ok", patient, plan };
 }

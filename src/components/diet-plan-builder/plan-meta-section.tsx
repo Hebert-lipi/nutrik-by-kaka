@@ -94,20 +94,17 @@ export function PlanMetaSection({
             />
           </div>
           <div className="space-y-2">
-            <label htmlFor="plan-status-field" className="block text-small12 font-bold uppercase tracking-wide text-text-muted">
-              Status
-            </label>
-            <select
-              id="plan-status-field"
-              className={selectClass}
-              value={status}
-              onChange={(e) => onStatusChange(e.target.value as "draft" | "published")}
-            >
-              <option value="draft">Rascunho</option>
-              <option value="published" disabled={planKind === "patient_plan" && !linkedPatientId}>
-                Publicado (exige paciente vinculado)
-              </option>
-            </select>
+            <p className="block text-small12 font-bold uppercase tracking-wide text-text-muted">Status</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone={status === "published" ? "success" : "yellow"} className="font-semibold">
+                {status === "published" ? "Publicado (no app do paciente)" : "Rascunho"}
+              </Chip>
+            </div>
+            <p className="text-[11px] font-semibold leading-relaxed text-text-muted">
+              {status === "published"
+                ? "O paciente vê a última versão que você publicou. Salve o rascunho enquanto ajusta; use Publicar plano no final da página para atualizar o que ele vê."
+                : "Quando estiver pronto, use Publicar plano na barra inferior. Planos com paciente só publicam com vínculo definido."}
+            </p>
           </div>
           <div className="space-y-2">
             <label htmlFor="plan-kind" className="block text-small12 font-bold uppercase tracking-wide text-text-muted">
@@ -123,9 +120,12 @@ export function PlanMetaSection({
                 if (v === "template") onLinkedPatientIdChange(null);
               }}
             >
-              <option value="template">Plano modelo (biblioteca)</option>
-              <option value="patient_plan">Plano atribuído a paciente</option>
+              <option value="template">Plano modelo — reutilizável na biblioteca</option>
+              <option value="patient_plan">Plano atribuído — vinculado a um paciente</option>
             </select>
+            <p className="text-[11px] font-semibold text-text-muted">
+              Modelo serve como base para vários pacientes. Atribuído fica ligado a uma ficha e pode ser publicado no app.
+            </p>
           </div>
           {planKind === "patient_plan" ? (
             <div className="md:col-span-2 space-y-2">
@@ -146,7 +146,7 @@ export function PlanMetaSection({
                 ))}
               </select>
               <p className="text-[11px] font-semibold text-text-muted">
-                Pacientes do Supabase (mesmo cadastro da página Pacientes). Você pode trocar o vínculo a qualquer momento.
+                Mesma lista da página Pacientes. Obrigatório para publicar no app. Você pode trocar o vínculo a qualquer momento.
               </p>
             </div>
           ) : (

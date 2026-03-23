@@ -50,8 +50,8 @@ export default function PatientsPage() {
         </p>
       ) : null}
 
-      <Card>
-        <CardContent className="space-y-6 pt-6">
+      <Card className="min-w-0 max-w-full">
+        <CardContent className="min-w-0 max-w-full space-y-6 pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 ring-1 ring-primary/20">
@@ -78,7 +78,11 @@ export default function PatientsPage() {
             </Button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-bg-0 shadow-inner">
+          <div
+            className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-neutral-200/80 bg-bg-0 shadow-inner [-webkit-overflow-scrolling:touch] touch-pan-x"
+            role="region"
+            aria-label="Tabela de pacientes — deslize horizontalmente em telas pequenas"
+          >
             <Table className="min-w-[640px]">
               <thead>
                 <tr>

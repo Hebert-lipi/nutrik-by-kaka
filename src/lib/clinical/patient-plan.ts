@@ -1,4 +1,11 @@
-import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
+import type { DraftPatient, DraftPlan, DraftPlanMeal } from "@/lib/draft-storage";
+
+/** Refeições como o paciente vê (snapshot publicado), ou o plano inteiro se ainda não há snapshot separado. */
+export function getPatientFacingMeals(plan: DraftPlan): DraftPlanMeal[] {
+  if (plan.status !== "published") return plan.meals;
+  if (plan.portalMeals && plan.portalMeals.length > 0) return plan.portalMeals;
+  return plan.meals;
+}
 
 export function getPlansLinkedToPatient(patientId: string, plans: DraftPlan[]): DraftPlan[] {
   return plans.filter((p) => p.linkedPatientId === patientId);
