@@ -97,6 +97,31 @@ export function IconDietPlan({ className }: { className?: string }) {
   );
 }
 
+/** Pedidos de acesso profissional / fila de aprovação. */
+export function IconAccessRequests({ className }: { className?: string }) {
+  return (
+    <IconBase className={className}>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+        <path
+          d="M5.5 4.2h9a1.3 1.3 0 0 1 1.3 1.3v10.5a1.3 1.3 0 0 1-1.3 1.3h-9a1.3 1.3 0 0 1-1.3-1.3V5.5a1.3 1.3 0 0 1 1.3-1.3Z"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <path d="M7.2 8.2h5.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M7.2 11.2h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <path
+          d="M8.2 3.2V2.5h3.6v.7"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </IconBase>
+  );
+}
+
 /** Porta + seta (logout), alinhado a referências tipo pill “Sair”. */
 export function IconLogout({ className }: { className?: string }) {
   return (

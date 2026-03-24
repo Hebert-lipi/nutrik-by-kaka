@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NUTRIK_LOGO_PUBLIC_PATH } from "@/components/ui/nutrik-brand-image";
-import { IconDashboard, IconDietPlan, IconUsers } from "./icons";
+import { IconAccessRequests, IconDashboard, IconDietPlan, IconUsers } from "./icons";
 import { SidebarLogoutButton } from "./sidebar-logout-button";
 
 export type SidebarItem = {
@@ -19,6 +19,11 @@ export function Sidebar({ currentPath }: { currentPath: string }) {
       { href: "/dashboard", label: "Painel", icon: <IconDashboard className="shrink-0" /> },
       { href: "/patients", label: "Pacientes", icon: <IconUsers className="shrink-0" /> },
       { href: "/diet-plans", label: "Biblioteca", icon: <IconDietPlan className="shrink-0" /> },
+      {
+        href: "/dashboard/solicitacoes-acesso",
+        label: "Acesso profissional",
+        icon: <IconAccessRequests className="shrink-0" />,
+      },
     ],
     [],
   );

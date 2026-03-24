@@ -25,10 +25,13 @@ Você pode testar **só um** dos perfis ou **os dois**, se a organização do te
 2. **Conta**  
    Você receberá **e-mail e senha** (ou instruções para criar conta). Guarde em local seguro.
 
-3. **Navegador**  
+3. **Profissionais (nutricionistas)**  
+   Contas novas criadas pelo login público entram como **paciente** no sistema até a **clínica/equipe** autorizar o acesso clínico (promoção interna). Se você for testar a **área da nutricionista** e só conseguir ver o portal do paciente, peça à equipe para **liberar sua conta como profissional** antes do teste.
+
+4. **Navegador**  
    Prefira **Chrome**, **Edge** ou **Firefox** atualizados. No celular, pode testar pelo navegador também.
 
-4. **Paciente vinculado ao portal**  
+5. **Paciente vinculado ao portal**  
    Para o paciente ver o plano em **“Meu plano”**, o cadastro dele na área da nutricionista deve usar o **mesmo e-mail** com que o paciente faz login. A equipe pode já ter deixado isso configurado para você.
 
 ---

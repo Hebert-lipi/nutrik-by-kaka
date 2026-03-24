@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 /**
  * Executa claim paciente ↔ auth (mesmo e-mail) no cliente após navegação.
- * O controlo de rotas (paciente vs nutricionista) fica no middleware + `getUserContext`.
+ * O controlo de rotas (paciente vs staff clínico) fica no middleware + `getUserContext` (`profiles.role`).
  */
 export function NutritionistBootstrap({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {

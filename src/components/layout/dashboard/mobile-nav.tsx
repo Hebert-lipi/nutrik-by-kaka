@@ -11,6 +11,7 @@ const navItems = [
   { href: "/dashboard", label: "Painel" },
   { href: "/patients", label: "Pacientes" },
   { href: "/diet-plans", label: "Biblioteca" },
+  { href: "/dashboard/solicitacoes-acesso", label: "Acesso profissional" },
   { href: "/meu-plano", label: "Meu plano" },
 ];
 

@@ -66,15 +66,15 @@ export async function middleware(request: NextRequest) {
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
-  // Nutricionista sem ficha de paciente vinculada: portal não se aplica (evita confusão).
-  // Quem é nutri E paciente pode abrir /meu-plano para ver o plano publicado da própria ficha.
-  if (ctx.isNutritionist && !ctx.isPatient && pathname.startsWith("/meu-plano")) {
+  // Staff clínico sem ficha de paciente: portal não se aplica.
+  if (ctx.isClinicalStaff && !ctx.isPatient && pathname.startsWith("/meu-plano")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
-  if (ctx.isPatient && !ctx.isNutritionist && isInternalWorkspacePath(pathname)) {
+  // Sem role clínico: não acede à área interna nem PDF clínico (autorização explícita).
+  if (!ctx.isClinicalStaff && isInternalWorkspacePath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/meu-plano";
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));

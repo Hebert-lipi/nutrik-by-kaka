@@ -15,12 +15,20 @@ export default function PatientPortalLayout({ children }: { children: ReactNode 
             <NutrikBrandImage priority className="md:h-10" />
             <p className="text-[11px] font-medium text-text-muted">Seu plano alimentar</p>
           </div>
-          <Link
-            href="/dashboard"
-            className="text-[11px] font-semibold uppercase tracking-wide text-secondary underline-offset-4 hover:underline"
-          >
-            Área da nutricionista
-          </Link>
+          <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
+            <Link
+              href="/dashboard"
+              className="text-[11px] font-semibold uppercase tracking-wide text-secondary underline-offset-4 hover:underline"
+            >
+              Área da nutricionista
+            </Link>
+            <Link
+              href="/solicitar-acesso-profissional"
+              className="text-[10px] font-semibold text-text-muted underline-offset-4 hover:text-text-secondary hover:underline"
+            >
+              Sou nutricionista — solicitar acesso
+            </Link>
+          </div>
         </div>
       </header>
       <div className="mx-auto max-w-3xl px-4 py-8 md:px-6 md:py-10">{children}</div>
