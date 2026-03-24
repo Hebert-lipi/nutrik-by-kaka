@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Chip } from "@/components/ui/chip";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { useSupabasePatients } from "@/hooks/use-supabase-patients";
@@ -30,6 +30,7 @@ export function PatientWorkspaceShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { patients, loading } = useSupabasePatients();
   const patient = patients.find((p) => p.id === patientId);
   const status = patient?.clinicalStatus ?? "active";
@@ -39,6 +40,14 @@ export function PatientWorkspaceShell({
   const lastTouch = patient?.updatedAt ?? patient?.createdAt;
   const phone = patient?.phone?.trim() || "—";
   const email = patient?.email ?? "—";
+
+  React.useEffect(() => {
+    if (!patientId) return;
+    // Prefetch das rotas mais comuns para navegação quase instantânea.
+    for (const tab of PATIENT_WORKSPACE_TABS) {
+      router.prefetch(patientWorkspaceHref(patientId, tab.segment));
+    }
+  }, [patientId, router]);
 
   return (
     <div className="space-y-4 pb-5">
@@ -127,6 +136,8 @@ export function PatientWorkspaceShell({
               <Link
                 key={tab.segment || "resumo"}
                 href={href}
+                onMouseEnter={() => router.prefetch(href)}
+                onFocus={() => router.prefetch(href)}
                 className={cn(
                   "shrink-0 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors md:px-3.5 md:text-small12 md:normal-case md:tracking-normal",
                   active

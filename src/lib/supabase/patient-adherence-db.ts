@@ -16,6 +16,23 @@ export type AdherenceLogRow = {
   updated_at: string;
 };
 
+const ADHERENCE_CACHE_TTL_MS = 30_000;
+const adherenceListCache = new Map<string, { data: AdherenceLogRow[]; fetchedAt: number }>();
+const adherenceInflight = new Map<string, Promise<AdherenceLogRow[]>>();
+
+function adherenceListKey(patientId: string, limit: number): string {
+  return `${patientId}:${limit}`;
+}
+
+function invalidateAdherenceCache(patientId: string): void {
+  for (const key of adherenceListCache.keys()) {
+    if (key.startsWith(`${patientId}:`)) adherenceListCache.delete(key);
+  }
+  for (const key of adherenceInflight.keys()) {
+    if (key.startsWith(`${patientId}:`)) adherenceInflight.delete(key);
+  }
+}
+
 export async function fetchAdherenceLogsForDay(
   patientId: string,
   planId: string,
@@ -71,11 +88,13 @@ export async function upsertMealAdherenceRow(input: {
       })
       .eq("id", (existing as { id: string }).id);
     if (upErr) throw new Error(upErr.message);
+    invalidateAdherenceCache(input.patientId);
     return;
   }
 
   const { error: insErr } = await supabase.from("patient_adherence_logs").insert(row);
   if (insErr) throw new Error(insErr.message);
+  invalidateAdherenceCache(input.patientId);
 }
 
 export async function upsertDailyAdherenceNote(input: {
@@ -109,15 +128,26 @@ export async function upsertDailyAdherenceNote(input: {
   if (existing && typeof (existing as { id?: string }).id === "string") {
     const { error: upErr } = await supabase.from("patient_adherence_logs").update({ notes: input.notes }).eq("id", (existing as { id: string }).id);
     if (upErr) throw new Error(upErr.message);
+    invalidateAdherenceCache(input.patientId);
     return;
   }
 
   const { error: insErr } = await supabase.from("patient_adherence_logs").insert(row);
   if (insErr) throw new Error(insErr.message);
+  invalidateAdherenceCache(input.patientId);
 }
 
 /** Lista recente para a nutricionista (somente leitura). */
 export async function fetchAdherenceLogsForPatient(patientId: string, limit = 40): Promise<AdherenceLogRow[]> {
+  const key = adherenceListKey(patientId, limit);
+  const cached = adherenceListCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < ADHERENCE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const inflight = adherenceInflight.get(key);
+  if (inflight) return inflight;
+
+  const run = (async () => {
   const { data, error } = await supabase
     .from("patient_adherence_logs")
     .select("*")
@@ -125,6 +155,15 @@ export async function fetchAdherenceLogsForPatient(patientId: string, limit = 40
     .order("log_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as AdherenceLogRow[];
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as AdherenceLogRow[];
+    adherenceListCache.set(key, { data: rows, fetchedAt: Date.now() });
+    return rows;
+  })();
+  adherenceInflight.set(key, run);
+  try {
+    return await run;
+  } finally {
+    adherenceInflight.delete(key);
+  }
 }

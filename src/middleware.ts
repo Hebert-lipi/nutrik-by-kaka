@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserContext, isInternalWorkspacePath, resolvePostAuthPath } from "@/lib/auth/user-context";
+import { getUserContext, isInternalWorkspacePath, parseEntryIntent, resolvePostAuthPath } from "@/lib/auth/user-context";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
 function applySupabaseCookies(from: NextResponse, to: NextResponse) {
@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const intent = parseEntryIntent(request.cookies.get("nutrik_entry_intent")?.value);
 
   if (!user) {
     if (pathname === "/") {
@@ -56,13 +57,13 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = resolvePostAuthPath(ctx);
+    url.pathname = resolvePostAuthPath(ctx, intent);
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
     const url = request.nextUrl.clone();
-    url.pathname = resolvePostAuthPath(ctx);
+    url.pathname = resolvePostAuthPath(ctx, intent);
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 

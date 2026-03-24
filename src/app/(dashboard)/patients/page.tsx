@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
@@ -11,6 +13,8 @@ import { Modal } from "@/components/ui/modal";
 import Link from "next/link";
 import { useSupabasePatients, type NewPatientWizardInput } from "@/hooks/use-supabase-patients";
 import { PatientAddWizardModal } from "@/components/patients/patient-add-wizard-modal";
+import { fetchAdherenceLogsForPatient } from "@/lib/supabase/patient-adherence-db";
+import { fetchAssessmentsByPatient } from "@/lib/supabase/patient-assessments";
 
 function emailDomain(email: string) {
   const at = email.indexOf("@");
@@ -18,7 +22,9 @@ function emailDomain(email: string) {
   return email.slice(at + 1) || null;
 }
 
-export default function PatientsPage() {
+function PatientsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { patients, addPatient, removePatient, loading, error } = useSupabasePatients();
   const [addOpen, setAddOpen] = React.useState(false);
   const [removeId, setRemoveId] = React.useState<string | null>(null);
@@ -35,6 +41,28 @@ export default function PatientsPage() {
     }
     setRemoveId(null);
   }
+
+  const query = (searchParams.get("q") ?? "").trim().toLowerCase();
+  const filteredPatients = React.useMemo(() => {
+    if (!query) return patients;
+    return patients.filter((p) => {
+      const domain = emailDomain(p.email) ?? "";
+      return [p.name, p.email, domain, p.planLabel].join(" ").toLowerCase().includes(query);
+    });
+  }, [patients, query]);
+
+  const prefetchPatientWorkspace = React.useCallback(
+    (id: string) => {
+      const base = `/patients/${id}`;
+      router.prefetch(base);
+      router.prefetch(`${base}/plano`);
+      router.prefetch(`${base}/avaliacoes`);
+      // Pré-aquece caches de dados clínicos mais pesados.
+      void fetchAdherenceLogsForPatient(id, 60).catch(() => undefined);
+      void fetchAssessmentsByPatient(id).catch(() => undefined);
+    },
+    [router],
+  );
 
   return (
     <div className="space-y-6 md:space-y-7">
@@ -77,6 +105,11 @@ export default function PatientsPage() {
               Novo paciente
             </Button>
           </div>
+          {query ? (
+            <p className="text-small12 font-semibold text-text-muted">
+              {filteredPatients.length} resultado(s) para <span className="text-text-primary">"{query}"</span>
+            </p>
+          ) : null}
 
           <div
             className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-neutral-200/80 bg-bg-0 shadow-inner [-webkit-overflow-scrolling:touch] touch-pan-x"
@@ -99,18 +132,22 @@ export default function PatientsPage() {
                       Carregando pacientes…
                     </TableCell>
                   </tr>
-                ) : patients.length === 0 ? (
+                ) : filteredPatients.length === 0 ? (
                   <tr>
                     <TableCell colSpan={4} className="border-0 p-5 md:p-8">
                       <EmptyState
-                        title="Lista vazia"
-                        description="Inclua o primeiro paciente para ativar a tabela. Cada linha pode receber um plano vinculado."
+                        title={query ? "Nenhum resultado" : "Lista vazia"}
+                        description={
+                          query
+                            ? "Tente outro termo de busca (nome, e-mail ou domínio)."
+                            : "Inclua o primeiro paciente para ativar a tabela. Cada linha pode receber um plano vinculado."
+                        }
                         action={{ label: "Cadastrar paciente", onClick: () => setAddOpen(true) }}
                       />
                     </TableCell>
                   </tr>
                 ) : (
-                  patients.map((p) => (
+                  filteredPatients.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -125,12 +162,16 @@ export default function PatientsPage() {
                           <div className="min-w-0">
                             <Link
                               href={`/patients/${p.id}`}
+                              onMouseEnter={() => prefetchPatientWorkspace(p.id)}
+                              onFocus={() => prefetchPatientWorkspace(p.id)}
                               className="block font-semibold text-text-primary underline-offset-4 hover:text-primary hover:underline"
                             >
                               {p.name}
                             </Link>
                             <Link
                               href={`/patients/${p.id}`}
+                              onMouseEnter={() => prefetchPatientWorkspace(p.id)}
+                              onFocus={() => prefetchPatientWorkspace(p.id)}
                               className="mt-1.5 inline-flex max-w-[12rem] rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2"
                             >
                               <Chip tone="muted" className="max-w-full cursor-pointer transition-opacity hover:opacity-85">
@@ -186,5 +227,13 @@ export default function PatientsPage() {
         <p className="text-body14 text-text-secondary">Deseja continuar?</p>
       </Modal>
     </div>
+  );
+}
+
+export default function PatientsPage() {
+  return (
+    <Suspense fallback={<div className="text-body14 font-semibold text-text-muted">Carregando pacientes…</div>}>
+      <PatientsPageContent />
+    </Suspense>
   );
 }

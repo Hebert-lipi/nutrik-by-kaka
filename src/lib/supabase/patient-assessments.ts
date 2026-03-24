@@ -47,15 +47,41 @@ export type UpsertPatientAssessmentInput = Partial<Omit<PatientAssessmentRow, "i
   assessment_date: string;
 };
 
+const ASSESSMENTS_CACHE_TTL_MS = 30_000;
+const assessmentsCache = new Map<string, { data: PatientAssessmentRow[]; fetchedAt: number }>();
+const assessmentsInflight = new Map<string, Promise<PatientAssessmentRow[]>>();
+
+function invalidateAssessmentsCache(patientId: string): void {
+  assessmentsCache.delete(patientId);
+  assessmentsInflight.delete(patientId);
+}
+
 export async function fetchAssessmentsByPatient(patientId: string): Promise<PatientAssessmentRow[]> {
+  const cached = assessmentsCache.get(patientId);
+  if (cached && Date.now() - cached.fetchedAt < ASSESSMENTS_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const inflight = assessmentsInflight.get(patientId);
+  if (inflight) return inflight;
+
+  const run = (async () => {
   const { data, error } = await supabase
     .from("patient_assessments")
     .select("*")
     .eq("patient_id", patientId)
     .order("assessment_date", { ascending: false })
     .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as PatientAssessmentRow[];
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as PatientAssessmentRow[];
+    assessmentsCache.set(patientId, { data: rows, fetchedAt: Date.now() });
+    return rows;
+  })();
+  assessmentsInflight.set(patientId, run);
+  try {
+    return await run;
+  } finally {
+    assessmentsInflight.delete(patientId);
+  }
 }
 
 export async function upsertAssessment(input: UpsertPatientAssessmentInput): Promise<void> {
@@ -68,10 +94,14 @@ export async function upsertAssessment(input: UpsertPatientAssessmentInput): Pro
   };
   const { error } = await supabase.from("patient_assessments").upsert(payload, { onConflict: "id" });
   if (error) throw new Error(error.message);
+  invalidateAssessmentsCache(input.patient_id);
 }
 
 export async function removeAssessment(id: string): Promise<void> {
+  const { data: row } = await supabase.from("patient_assessments").select("patient_id").eq("id", id).maybeSingle();
+  const patientId = row && typeof (row as { patient_id?: string }).patient_id === "string" ? (row as { patient_id: string }).patient_id : null;
   const { error } = await supabase.from("patient_assessments").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  if (patientId) invalidateAssessmentsCache(patientId);
 }
 

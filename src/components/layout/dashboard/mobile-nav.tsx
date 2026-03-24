@@ -6,17 +6,24 @@ import { cn } from "@/lib/utils";
 import { NUTRIK_LOGO_PUBLIC_PATH } from "@/components/ui/nutrik-brand-image";
 import { IconClose, IconMenu } from "./icons";
 import { SidebarLogoutButton } from "./sidebar-logout-button";
-
-const navItems = [
-  { href: "/dashboard", label: "Painel" },
-  { href: "/patients", label: "Pacientes" },
-  { href: "/diet-plans", label: "Biblioteca" },
-  { href: "/dashboard/solicitacoes-acesso", label: "Acesso profissional" },
-  { href: "/meu-plano", label: "Meu plano" },
-];
+import { useProfileRole } from "@/hooks/use-profile-role";
 
 export function MobileNav({ currentPath }: { currentPath: string }) {
+  const { isAdmin, loading } = useProfileRole();
   const [open, setOpen] = React.useState(false);
+
+  const navItems = React.useMemo(() => {
+    const base = [
+      { href: "/dashboard", label: "Painel" },
+      { href: "/patients", label: "Pacientes" },
+      { href: "/diet-plans", label: "Biblioteca" },
+    ];
+    if (!loading && isAdmin) {
+      base.push({ href: "/dashboard/solicitacoes-acesso", label: "Acesso profissional" });
+    }
+    base.push({ href: "/meu-plano", label: "Meu plano" });
+    return base;
+  }, [isAdmin, loading]);
 
   React.useEffect(() => {
     setOpen(false);

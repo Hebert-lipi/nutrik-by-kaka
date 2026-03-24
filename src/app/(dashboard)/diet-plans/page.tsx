@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/dashboard/page-header";
@@ -19,11 +20,13 @@ import { cloneEntirePlan } from "@/lib/diet-plan-factory";
 import type { DraftPlan } from "@/lib/draft-storage";
 import { ensureFullDietPlan } from "@/lib/supabase/diet-plan-resolve";
 
-export default function DietPlansPage() {
+function DietPlansPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { patients } = useSupabasePatients();
   const { plans, removePlan, togglePublish, upsertPlan, loading, error, fetchPlanById } = useSupabaseDietPlans();
   const [listError, setListError] = React.useState<string | null>(null);
+  const query = (searchParams.get("q") ?? "").trim().toLowerCase();
 
   function patientLabel(id: string | null) {
     if (!id) return null;
@@ -42,6 +45,14 @@ export default function DietPlansPage() {
     }
   }
   const [removeId, setRemoveId] = React.useState<string | null>(null);
+  const filteredPlans = React.useMemo(() => {
+    if (!query) return plans;
+    return plans.filter((pl) => {
+      const linkedPatient = patientLabel(pl.linkedPatientId) ?? "";
+      const kind = pl.planKind === "patient_plan" ? "paciente" : "modelo";
+      return [pl.name, pl.description ?? "", kind, pl.status, linkedPatient].join(" ").toLowerCase().includes(query);
+    });
+  }, [plans, query, patients]);
 
   return (
     <div className="space-y-10">
@@ -76,8 +87,17 @@ export default function DietPlansPage() {
               Novo plano
             </Link>
           </div>
+          {query ? (
+            <p className="text-small12 font-semibold text-text-muted">
+              {filteredPlans.length} resultado(s) para <span className="text-text-primary">"{query}"</span>
+            </p>
+          ) : null}
 
-          <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-bg-0 shadow-inner">
+          <div
+            className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-neutral-200/80 bg-bg-0 shadow-inner [-webkit-overflow-scrolling:touch] touch-pan-x"
+            role="region"
+            aria-label="Tabela de planos alimentares — deslize horizontalmente em telas pequenas"
+          >
             <Table className="min-w-[720px]">
               <thead>
                 <tr>
@@ -96,12 +116,16 @@ export default function DietPlansPage() {
                       Carregando planos…
                     </TableCell>
                   </tr>
-                ) : plans.length === 0 ? (
+                ) : filteredPlans.length === 0 ? (
                   <tr>
                     <TableCell colSpan={6} className="border-0 p-5 md:p-8">
                       <EmptyState
-                        title="Nenhum plano na biblioteca"
-                        description="Comece por um modelo reutilizável ou por um plano já ligado a um paciente. Você define isso no primeiro passo, antes do construtor."
+                        title={query ? "Nenhum resultado" : "Nenhum plano na biblioteca"}
+                        description={
+                          query
+                            ? "Tente buscar por nome do plano, status, tipo ou paciente vinculado."
+                            : "Comece por um modelo reutilizável ou por um plano já ligado a um paciente. Você define isso no primeiro passo, antes do construtor."
+                        }
                         action={{ label: "Criar novo plano", onClick: () => router.push("/diet-plans/new") }}
                       />
                       <div className="mt-6 flex flex-wrap items-center justify-center gap-2 border-t border-neutral-100/90 pt-5">
@@ -112,7 +136,7 @@ export default function DietPlansPage() {
                     </TableCell>
                   </tr>
                 ) : (
-                  plans.map((pl) => (
+                  filteredPlans.map((pl) => (
                     <TableRow key={pl.id}>
                       <TableCell>
                         <div className="min-w-0">
@@ -222,5 +246,13 @@ export default function DietPlansPage() {
         <p className="text-body14 text-text-secondary">Esta ação não pode ser desfeita nesta sessão.</p>
       </Modal>
     </div>
+  );
+}
+
+export default function DietPlansPage() {
+  return (
+    <Suspense fallback={<div className="text-body14 font-semibold text-text-muted">Carregando planos…</div>}>
+      <DietPlansPageContent />
+    </Suspense>
   );
 }

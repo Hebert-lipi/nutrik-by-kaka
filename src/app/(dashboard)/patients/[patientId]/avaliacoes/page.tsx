@@ -598,33 +598,35 @@ export default function PatientAvaliacoesPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-neutral-200/55">
+            <Card className="border-neutral-200/55 lg:max-h-[620px]">
               <CardHeader className="border-b border-neutral-100/90 pb-3">
                 <p className="text-title16 font-semibold text-text-primary">Histórico de avaliações</p>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="min-h-0 p-0">
                 {loading ? (
                   <p className="p-5 text-small12 font-semibold text-text-muted">Carregando avaliações...</p>
                 ) : items.length === 0 ? (
                   <div className="p-5"><EmptyState title="Sem avaliações" description="Crie a primeira avaliação para iniciar a evolução clínica." action={{ label: "Nova avaliação", onClick: startNew }} /></div>
                 ) : (
-                  <ul className="divide-y divide-neutral-100/90">
-                    {items.map((row) => (
-                      <li key={row.id} className="px-4 py-3 md:px-5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <button type="button" className="text-left" onClick={() => setSelectedId(row.id)}>
-                            <p className="text-body14 font-semibold text-text-primary">{row.assessment_date}</p>
-                            <p className="text-small12 text-text-secondary">{row.weight_kg != null ? `${row.weight_kg} kg` : "sem peso"} · {row.body_fat_pct != null ? `${row.body_fat_pct}% gordura` : "sem % gordura"}</p>
-                          </button>
-                          <div className="flex items-center gap-2">
-                            {selected?.id === row.id ? <Chip tone="primary">Selecionada</Chip> : null}
-                            <Button type="button" variant="outline" size="sm" onClick={() => editRow(row.id)}>Editar</Button>
-                            <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => void deleteCurrent(row.id)}>Excluir</Button>
+                  <div className="max-h-[520px] overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                    <ul className="divide-y divide-neutral-100/90">
+                      {items.map((row) => (
+                        <li key={row.id} className="px-4 py-3 md:px-5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <button type="button" className="text-left" onClick={() => setSelectedId(row.id)}>
+                              <p className="text-body14 font-semibold text-text-primary">{row.assessment_date}</p>
+                              <p className="text-small12 text-text-secondary">{row.weight_kg != null ? `${row.weight_kg} kg` : "sem peso"} · {row.body_fat_pct != null ? `${row.body_fat_pct}% gordura` : "sem % gordura"}</p>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              {selected?.id === row.id ? <Chip tone="primary">Selecionada</Chip> : null}
+                              <Button type="button" variant="outline" size="sm" onClick={() => editRow(row.id)}>Editar</Button>
+                              <Button type="button" variant="ghost" size="sm" className="text-orange" onClick={() => void deleteCurrent(row.id)}>Excluir</Button>
+                            </div>
                           </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MobileNav } from "./mobile-nav";
 import { IconBell, IconSearch } from "./icons";
 
@@ -14,6 +15,33 @@ export function Topbar({
   currentPath: string;
   compactTitle?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [query, setQuery] = React.useState("");
+
+  React.useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    setQuery((prev) => (prev === q ? prev : q));
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    const id = window.setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      const next = query.trim();
+      if (next) params.set("q", next);
+      else params.delete("q");
+      const qs = params.toString();
+      const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+      const currentQs = searchParams.toString();
+      const currentUrl = currentQs ? `${pathname}?${currentQs}` : pathname;
+      if (nextUrl !== currentUrl) {
+        router.replace(nextUrl);
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [pathname, query, router, searchParams]);
+
   return (
     <header className="nutrik-print-hide z-30 shrink-0 px-1 pb-2 pt-1 md:px-0 md:pb-3 md:pt-0">
       <div className="rounded-lg border border-neutral-200/65 bg-bg-0/96 shadow-premium-sm ring-1 ring-black/[0.025] backdrop-blur-xl">
@@ -41,15 +69,32 @@ export function Topbar({
               type="search"
               placeholder="Buscar pacientes, planos…"
               className="h-9 w-full rounded-md border border-neutral-200/80 bg-neutral-50/90 pl-9 pr-3 text-body14 text-text-primary outline-none transition-all placeholder:text-neutral-400 focus:border-primary/25 focus:bg-bg-0 focus:ring-2 focus:ring-primary/12"
-              readOnly
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               aria-label="Busca"
             />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition-colors hover:bg-neutral-100 hover:text-text-primary"
+                aria-label="Limpar busca"
+              >
+                Limpar
+              </button>
+            ) : null}
           </div>
           <Link
             href="/meu-plano"
             className="hidden rounded-md border border-neutral-200/80 px-2.5 py-1.5 text-[11px] font-semibold text-secondary transition-colors hover:border-primary/25 hover:bg-primary/[0.06] sm:inline-block"
           >
             Meu plano
+          </Link>
+          <Link
+            href="/dashboard/performance"
+            className="hidden rounded-md border border-neutral-200/80 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition-colors hover:border-primary/25 hover:bg-primary/[0.06] lg:inline-block"
+          >
+            Performance
           </Link>
           <button
             type="button"

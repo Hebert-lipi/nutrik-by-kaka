@@ -67,3 +67,12 @@ export function getPerfSummary(): Array<{ key: string; count: number; avgMs: num
   });
 }
 
+export function getRecentPerfMetrics(limit = 100): PerfMetric[] {
+  return readStore().slice(-Math.max(1, limit));
+}
+
+export function clearPerfMetrics(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem("nutrik:perf:metrics");
+}
+

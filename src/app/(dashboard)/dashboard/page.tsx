@@ -193,7 +193,7 @@ export default function DashboardPage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
-        <Card className="flex h-full flex-col">
+        <Card className="flex h-full min-h-0 flex-col lg:max-h-[560px]">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div>
               <p className="text-title16 font-semibold text-text-primary">Atividade recente</p>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
             </div>
             <Chip tone="primary">Ao vivo</Chip>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col pt-2">
+          <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
             {snap.activity.length === 0 ? (
               <div className="flex flex-1 flex-col justify-center py-6">
                 <EmptyState
@@ -211,12 +211,14 @@ export default function DashboardPage() {
                 />
               </div>
             ) : (
-              <ActivityFeed items={snap.activity} />
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                <ActivityFeed items={snap.activity} />
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="flex h-full flex-col">
+        <Card className="flex h-full min-h-0 flex-col lg:max-h-[560px]">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div>
               <p className="text-title16 font-semibold text-text-primary">Planos recentes</p>
@@ -226,7 +228,7 @@ export default function DashboardPage() {
               Ver todos
             </Link>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col pt-2">
+          <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
             {snap.recentPlans.length === 0 ? (
               <EmptyState
                 title="Nenhum plano ainda"
@@ -235,32 +237,34 @@ export default function DashboardPage() {
                 hideIllustration
               />
             ) : (
-              <ul className="space-y-2">
-                {snap.recentPlans.map((pl: DraftPlan) => (
-                  <li
-                    key={pl.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-gradient-to-r from-bg-0 to-neutral-50/30 px-3 py-3 transition-all hover:border-primary/20 hover:shadow-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-bold text-text-primary">{pl.name}</p>
-                      <p className="mt-0.5 text-[11px] font-semibold text-text-muted">
-                        {pl.status === "published" ? "Publicado" : "Rascunho"}
-                      </p>
-                    </div>
-                    <Chip tone={pl.status === "published" ? "success" : "yellow"}>{pl.patientCount} pac.</Chip>
-                  </li>
-                ))}
-              </ul>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                <ul className="space-y-2">
+                  {snap.recentPlans.map((pl: DraftPlan) => (
+                    <li
+                      key={pl.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-gradient-to-r from-bg-0 to-neutral-50/30 px-3 py-3 transition-all hover:border-primary/20 hover:shadow-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-text-primary">{pl.name}</p>
+                        <p className="mt-0.5 text-[11px] font-semibold text-text-muted">
+                          {pl.status === "published" ? "Publicado" : "Rascunho"}
+                        </p>
+                      </div>
+                      <Chip tone={pl.status === "published" ? "success" : "yellow"}>{pl.patientCount} pac.</Chip>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="flex h-full flex-col">
+        <Card className="flex h-full min-h-0 flex-col lg:max-h-[560px]">
           <CardHeader className="pb-2">
             <p className="text-title16 font-semibold text-text-primary">Pacientes recentes</p>
             <p className="mt-0.5 text-small12 font-semibold text-text-muted">Acesso rápido</p>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col pt-2">
+          <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
             {snap.recentPatients.length === 0 ? (
               <EmptyState
                 title="Lista vazia"
@@ -269,27 +273,29 @@ export default function DashboardPage() {
                 hideIllustration
               />
             ) : (
-              <ul className="space-y-2">
-                {snap.recentPatients.map((p: DraftPatient) => (
-                  <li key={p.id}>
-                    <Link
-                      href={`/patients/${p.id}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-bg-0 px-3 py-3 transition-all hover:border-primary/20 hover:bg-neutral-50/40"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-yellow/15 text-small12 font-semibold text-text-primary ring-1 ring-primary/10">
-                          {initials(p.name)}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-bold text-text-primary">{p.name}</p>
-                          <p className="truncate text-[11px] font-semibold text-text-muted">{p.email}</p>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                <ul className="space-y-2">
+                  {snap.recentPatients.map((p: DraftPatient) => (
+                    <li key={p.id}>
+                      <Link
+                        href={`/patients/${p.id}`}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100/90 bg-bg-0 px-3 py-3 transition-all hover:border-primary/20 hover:bg-neutral-50/40"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-yellow/15 text-small12 font-semibold text-text-primary ring-1 ring-primary/10">
+                            {initials(p.name)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-text-primary">{p.name}</p>
+                            <p className="truncate text-[11px] font-semibold text-text-muted">{p.email}</p>
+                          </div>
                         </div>
-                      </div>
-                      <Chip tone="primary">{p.planLabel === "—" ? "Sem plano" : p.planLabel}</Chip>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                        <Chip tone="primary">{p.planLabel === "—" ? "Sem plano" : p.planLabel}</Chip>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             <div className="mt-6 border-t border-neutral-100/90 pt-4">
               <Link

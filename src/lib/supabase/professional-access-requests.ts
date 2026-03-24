@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { UserRole } from "@/lib/auth/user-context";
+import { workspaceCutoverEnabled, workspaceDualReadEnabled } from "@/lib/feature-flags";
+import { resolveActiveClinicId } from "@/lib/clinic-context";
 
 export type ProfessionalAccessRequestRow = {
   id: string;
@@ -12,6 +14,8 @@ export type ProfessionalAccessRequestRow = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string;
+  target_clinic_id: string | null;
+  requested_role: "clinic_admin" | "nutritionist" | null;
   created_at: string;
   updated_at: string;
 };
@@ -32,11 +36,24 @@ export async function submitProfessionalAccessRequest(input: {
   professionalRegistration?: string;
   message?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data, error } = await supabase.rpc("submit_professional_access_request", {
+  const targetClinicId = workspaceDualReadEnabled ? await resolveActiveClinicId() : null;
+  const payloadArgs = {
     p_full_name: input.fullName.trim(),
     p_professional_registration: (input.professionalRegistration ?? "").trim(),
     p_message: (input.message ?? "").trim(),
-  });
+    p_target_clinic_id: targetClinicId,
+  };
+  let { data, error } = await supabase.rpc("submit_professional_access_request", payloadArgs);
+  if (error && /function .*submit_professional_access_request.*does not exist/i.test(error.message)) {
+    // Compatibilidade durante rollout da migration Fase 2.
+    const fallback = await supabase.rpc("submit_professional_access_request", {
+      p_full_name: payloadArgs.p_full_name,
+      p_professional_registration: payloadArgs.p_professional_registration,
+      p_message: payloadArgs.p_message,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) {
     return { ok: false, error: error.message };
   }
@@ -75,8 +92,8 @@ export async function reviewProfessionalAccessRequest(
   if (!payload?.ok) {
     const code = payload?.error ?? "unknown";
     const msg =
-      code === "forbidden"
-        ? "Sem permissão para analisar pedidos."
+      code === "admin_only" || code === "forbidden"
+        ? "Apenas administradores da clínica podem aprovar ou recusar pedidos."
         : code === "not_found"
           ? "Pedido não encontrado."
           : code === "already_processed"
@@ -88,21 +105,27 @@ export async function reviewProfessionalAccessRequest(
 }
 
 export async function fetchPendingProfessionalRequests(): Promise<ProfessionalAccessRequestRow[]> {
-  const { data, error } = await supabase
+  const activeClinicId = workspaceDualReadEnabled || workspaceCutoverEnabled ? await resolveActiveClinicId() : null;
+  const query = supabase
     .from("professional_access_requests")
     .select("*")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
+  const scoped = activeClinicId ? query.eq("target_clinic_id", activeClinicId) : query;
+  const { data, error } = await scoped;
   if (error || !data) return [];
   return data as ProfessionalAccessRequestRow[];
 }
 
 export async function fetchRecentProfessionalRequests(limit = 50): Promise<ProfessionalAccessRequestRow[]> {
-  const { data, error } = await supabase
+  const activeClinicId = workspaceDualReadEnabled || workspaceCutoverEnabled ? await resolveActiveClinicId() : null;
+  const query = supabase
     .from("professional_access_requests")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
+  const scoped = activeClinicId ? query.eq("target_clinic_id", activeClinicId) : query;
+  const { data, error } = await scoped;
   if (error || !data) return [];
   return data as ProfessionalAccessRequestRow[];
 }

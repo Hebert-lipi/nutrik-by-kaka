@@ -12,6 +12,8 @@ import { buildShoppingListFromPlan, groupShoppingByCategory, summarizeShoppingQu
 import Link from "next/link";
 import * as React from "react";
 import { fetchShoppingSnapshot, upsertShoppingSnapshot, type ShoppingSnapshot } from "@/lib/supabase/shopping-lists";
+import { ScrollableContent } from "@/components/ui/scrollable-content";
+import { ShoppingItemBadges } from "@/components/patients/shopping-item-badges";
 
 export default function PatientListaComprasPage() {
   const params = useParams();
@@ -209,7 +211,7 @@ export default function PatientListaComprasPage() {
               <p><span className="font-semibold text-text-primary">{quality.unitConflictCount}</span> com unidade inconsistente</p>
             </div>
 
-            <div className="space-y-4">
+            <ScrollableContent maxHeightClassName="max-h-[50vh]" className="space-y-4">
               {grouped.map((group) => (
                 <section key={group.category} className="rounded-xl border border-neutral-200/80 bg-bg-0 px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-secondary">{group.category}</p>
@@ -217,27 +219,34 @@ export default function PatientListaComprasPage() {
                     {group.items.map((item) => {
                       const idx = workingItems.findIndex((x) => x === item);
                       return (
-                        <div key={`${group.category}-${idx}-${item.name}`} className="grid gap-2 md:grid-cols-[1.2fr_1fr_auto]">
-                          <input
-                            value={item.name}
-                            onChange={(e) => updateItem(idx, { name: e.target.value })}
-                            className="h-9 rounded-lg border border-neutral-200/80 bg-bg-0 px-3 text-sm text-text-primary"
+                        <div key={`${group.category}-${idx}-${item.name}`} className="space-y-2 rounded-lg border border-neutral-100/80 bg-neutral-50/40 p-2.5">
+                          <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_auto]">
+                            <input
+                              value={item.name}
+                              onChange={(e) => updateItem(idx, { name: e.target.value })}
+                              className="h-9 rounded-lg border border-neutral-200/80 bg-bg-0 px-3 text-sm text-text-primary"
+                            />
+                            <input
+                              value={item.quantityLabel}
+                              onChange={(e) => updateItem(idx, { quantityLabel: e.target.value, missingQuantity: false })}
+                              className="h-9 rounded-lg border border-neutral-200/80 bg-bg-0 px-3 text-sm text-text-primary"
+                            />
+                            <Button type="button" variant="ghost" size="sm" className="h-9 text-orange" onClick={() => removeItem(idx)}>
+                              Remover
+                            </Button>
+                          </div>
+                          <ShoppingItemBadges
+                            quantityLabel={item.quantityLabel}
+                            missingQuantity={item.missingQuantity}
+                            unitConflict={item.unitConflict}
                           />
-                          <input
-                            value={item.quantityLabel}
-                            onChange={(e) => updateItem(idx, { quantityLabel: e.target.value, missingQuantity: false })}
-                            className="h-9 rounded-lg border border-neutral-200/80 bg-bg-0 px-3 text-sm text-text-primary"
-                          />
-                          <Button type="button" variant="ghost" size="sm" className="h-9 text-orange" onClick={() => removeItem(idx)}>
-                            Remover
-                          </Button>
                         </div>
                       );
                     })}
                   </div>
                 </section>
               ))}
-            </div>
+            </ScrollableContent>
 
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">Observação da nutricionista</p>

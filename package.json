@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
+    "dev:webpack": "next dev",
+    "clean:cache": "node -e \"const fs=require('fs'); const p='.next/cache'; if(fs.existsSync(p)){ fs.rmSync(p,{recursive:true,force:true}); console.log('Removed .next/cache'); } else { console.log('No .next/cache'); }\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

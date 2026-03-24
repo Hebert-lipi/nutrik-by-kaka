@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NutritionistBootstrap } from "./nutritionist-bootstrap";
+import { RoutePerfTracker } from "@/components/perf/route-perf-tracker";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -46,10 +48,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="box-border flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-bg-1 md:flex-row md:gap-4 md:p-4">
+      <RoutePerfTracker />
       <Sidebar currentPath={pathname} />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar title={finalTitle} currentPath={pathname} compactTitle={compactTopbarTitle} />
+        <Suspense
+          fallback={
+            <div className="nutrik-print-hide z-30 shrink-0 px-1 pb-2 pt-1 md:px-0 md:pb-3 md:pt-0">
+              <div className="h-[56px] rounded-lg border border-neutral-200/65 bg-bg-0/96 shadow-premium-sm ring-1 ring-black/[0.025]" />
+            </div>
+          }
+        >
+          <Topbar title={finalTitle} currentPath={pathname} compactTitle={compactTopbarTitle} />
+        </Suspense>
         <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
           <div
             className={cn(

@@ -29,7 +29,7 @@ export function ProfessionalAccessTeaser() {
       if (cancelled) return;
       const pending = reqs.find((r) => r.status === "pending");
       const approved = reqs.some((r) => r.status === "approved");
-      if (pending) setLine("Seu pedido de acesso profissional está em análise pela clínica.");
+      if (pending) setLine("Seu pedido de acesso profissional está em análise. Um administrador da clínica vai decidir.");
       else if (approved)
         setLine("Seu acesso foi aprovado. Abra o Painel clínico — se não aparecer, atualize a página ou entre de novo.");
       else setLine(null);
@@ -51,7 +51,7 @@ export function ProfessionalAccessTeaser() {
           <p className="text-small12 font-semibold leading-relaxed text-text-secondary">{line}</p>
         ) : (
           <p className="text-small12 font-semibold leading-relaxed text-text-secondary">
-            Se você é profissional e usa este mesmo login como paciente, pode solicitar acesso à área clínica. A liberação é feita pela clínica, sem
+            Se você é profissional e usa este mesmo login como paciente, pode solicitar acesso à área clínica. A liberação é feita por um administrador, sem
             automação.
           </p>
         )}
@@ -61,8 +61,8 @@ export function ProfessionalAccessTeaser() {
               Abrir painel clínico
             </Link>
           ) : (
-            <Link href="/solicitar-acesso-profissional" className={buttonClassName("secondary", "sm", "rounded-full font-bold")}>
-              {line?.includes("análise") ? "Detalhes do pedido" : "Solicitar acesso profissional"}
+            <Link href="/solicitar-acesso-profissional" className={buttonClassName("primary", "sm", "rounded-full px-5 font-bold")}>
+              {line?.includes("análise") ? "Ver status do pedido" : "Abrir formulário de pedido"}
             </Link>
           )}
         </div>

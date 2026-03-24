@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { NUTRIK_LOGO_PUBLIC_PATH } from "@/components/ui/nutrik-brand-image";
 import { IconAccessRequests, IconDashboard, IconDietPlan, IconUsers } from "./icons";
 import { SidebarLogoutButton } from "./sidebar-logout-button";
+import { useProfileRole } from "@/hooks/use-profile-role";
 
 export type SidebarItem = {
   href: string;
@@ -14,19 +15,23 @@ export type SidebarItem = {
 };
 
 export function Sidebar({ currentPath }: { currentPath: string }) {
-  const items: SidebarItem[] = useMemo(
-    () => [
+  const { isAdmin, loading } = useProfileRole();
+
+  const items: SidebarItem[] = useMemo(() => {
+    const base: SidebarItem[] = [
       { href: "/dashboard", label: "Painel", icon: <IconDashboard className="shrink-0" /> },
       { href: "/patients", label: "Pacientes", icon: <IconUsers className="shrink-0" /> },
       { href: "/diet-plans", label: "Biblioteca", icon: <IconDietPlan className="shrink-0" /> },
-      {
+    ];
+    if (!loading && isAdmin) {
+      base.push({
         href: "/dashboard/solicitacoes-acesso",
         label: "Acesso profissional",
         icon: <IconAccessRequests className="shrink-0" />,
-      },
-    ],
-    [],
-  );
+      });
+    }
+    return base;
+  }, [isAdmin, loading]);
 
   return (
     <aside className="nutrik-print-hide hidden h-full min-h-0 w-[264px] shrink-0 md:flex md:flex-col">

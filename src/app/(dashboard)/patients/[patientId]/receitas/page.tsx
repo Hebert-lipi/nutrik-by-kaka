@@ -12,6 +12,7 @@ import { getPublishedPlanForPatient, getPlansLinkedToPatient } from "@/lib/clini
 import { buildRecipesFromPlan } from "@/lib/pdf/plan-pdf-model";
 import { Chip } from "@/components/ui/chip";
 import type { DraftPlan } from "@/lib/draft-storage";
+import { ScrollableContent } from "@/components/ui/scrollable-content";
 
 export default function PatientReceitasPage() {
   const params = useParams();
@@ -55,6 +56,17 @@ export default function PatientReceitasPage() {
     return out;
   }, [plansForRecipes]);
 
+  const groupedRecipes = React.useMemo(() => {
+    const grouped = new Map<string, typeof recipes>();
+    for (const recipe of recipes) {
+      const key = recipe.sourcePlanName || "Sem plano";
+      const current = grouped.get(key) ?? [];
+      current.push(recipe);
+      grouped.set(key, current);
+    }
+    return [...grouped.entries()];
+  }, [recipes]);
+
   const addRecipeHref = publishedPlan ? `/diet-plans/${publishedPlan.id}/edit` : `/diet-plans/new?patientId=${encodeURIComponent(patientId)}`;
 
   if (!patientId) {
@@ -88,12 +100,12 @@ export default function PatientReceitasPage() {
         </Button>
       </div>
 
-      <Card className="border-neutral-200/70 bg-bg-0 shadow-premium-sm">
+      <Card className="border-neutral-200/70 bg-bg-0 shadow-premium-sm lg:max-h-[680px]">
         <CardHeader className="border-b border-neutral-100/80 pb-4">
           <p className="text-title16 font-semibold text-text-primary">Receitas liberadas</p>
           <p className="mt-1 text-small12 font-semibold text-text-muted">Origem: itens com preparo nos planos vinculados deste paciente.</p>
         </CardHeader>
-        <CardContent className="py-6">
+        <CardContent className="min-h-0 py-6">
           {recipes.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-body14 font-semibold text-text-muted">Nenhuma receita vinculada ainda.</p>
@@ -109,30 +121,38 @@ export default function PatientReceitasPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {recipes.map((r, idx) => (
-                <div key={`${r.title}-${r.sourcePlanId}-${idx}`} className="rounded-xl border border-neutral-200/70 bg-neutral-50/40 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-body14 font-semibold text-text-primary">{r.title}</p>
-                    <Chip tone={r.sourcePlanStatus === "published" ? "success" : "yellow"}>
-                      {r.sourcePlanStatus === "published" ? "Publicado" : "Rascunho"}
-                    </Chip>
-                  </div>
-                  <p className="mt-1 text-small12 text-text-secondary">
-                    Refeição: {r.sourceMealName} · Plano: {r.sourcePlanName}
-                  </p>
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className={buttonClassName("outline", "sm", "rounded-lg")}
-                      onClick={() => router.push(`/diet-plans/${r.sourcePlanId}/edit`)}
-                    >
-                      Editar no plano
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ScrollableContent>
+              <div className="space-y-4">
+                {groupedRecipes.map(([planName, group]) => (
+                  <section key={planName} className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Plano</p>
+                      <Chip tone="muted">{planName}</Chip>
+                      <Chip tone={group[0]?.sourcePlanStatus === "published" ? "success" : "yellow"}>
+                        {group[0]?.sourcePlanStatus === "published" ? "Publicado" : "Rascunho"}
+                      </Chip>
+                    </div>
+                    {group.map((r, idx) => (
+                      <div key={`${r.title}-${r.sourcePlanId}-${idx}`} className="rounded-xl border border-neutral-200/70 bg-neutral-50/40 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-body14 font-semibold text-text-primary">{r.title}</p>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-small12 text-text-secondary">Refeição: {r.sourceMealName}</p>
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            className={buttonClassName("outline", "sm", "rounded-lg")}
+                            onClick={() => router.push(`/diet-plans/${r.sourcePlanId}/edit`)}
+                          >
+                            Editar no plano
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            </ScrollableContent>
           )}
         </CardContent>
       </Card>

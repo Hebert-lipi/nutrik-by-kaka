@@ -12,8 +12,11 @@ import { PremiumLoginShell } from "@/components/auth/premium-login-shell";
 import { LoginGlassPanel } from "@/components/auth/login-glass-panel";
 import { NutrikLogoMark } from "@/components/auth/nutrik-logo-mark";
 import { cn } from "@/lib/utils";
+import { resolveActiveClinicId } from "@/lib/clinic-context";
+import { workspaceDualReadEnabled } from "@/lib/feature-flags";
 
 type Step = "email" | "code";
+type EntryIntent = "patient" | "professional";
 const OTP_CODE_LENGTH = 8;
 
 const COOLDOWN_AFTER_SEND_SEC = 60;
@@ -26,6 +29,9 @@ const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.12em]
 
 const primaryBtnClass =
   "group relative mt-1 w-full overflow-hidden rounded-full bg-primary py-3.5 text-base font-semibold text-primary-foreground shadow-[0_14px_40px_-12px_rgba(130,150,50,0.5),inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-black/[0.05] transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_18px_48px_-12px_rgba(130,150,50,0.55)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100";
+
+const intentBtnBase =
+  "flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35";
 
 function isRateLimitedError(error: { status?: number; message?: string } | null): boolean {
   if (!error) return false;
@@ -45,6 +51,7 @@ function formatCooldown(sec: number): string {
 export default function LoginPage() {
   const router = useRouter();
   const [step, setStep] = React.useState<Step>("email");
+  const [intent, setIntent] = React.useState<EntryIntent>("patient");
   const [email, setEmail] = React.useState("");
   const [code, setCode] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -58,6 +65,22 @@ export default function LoginPage() {
 
   const trimmedEmail = email.trim();
   const cooldownActive = sendCooldownSec > 0;
+
+  React.useEffect(() => {
+    const match = document.cookie.match(/(?:^|;\s*)nutrik_entry_intent=(patient|professional)(?:;|$)/);
+    if (match?.[1] === "patient" || match?.[1] === "professional") {
+      setIntent(match[1]);
+    }
+  }, []);
+
+  function persistIntentCookie(nextIntent: EntryIntent) {
+    document.cookie = `nutrik_entry_intent=${nextIntent}; Path=/; Max-Age=43200; SameSite=Lax`;
+  }
+
+  function updateIntent(nextIntent: EntryIntent) {
+    setIntent(nextIntent);
+    persistIntentCookie(nextIntent);
+  }
 
   React.useEffect(() => {
     if (!cooldownActive) return;
@@ -111,6 +134,7 @@ export default function LoginPage() {
       return;
     }
 
+    persistIntentCookie(intent);
     sendLockRef.current = true;
     setSending(true);
     try {
@@ -181,6 +205,10 @@ export default function LoginPage() {
         return;
       }
 
+      persistIntentCookie(intent);
+      if (workspaceDualReadEnabled && intent === "professional") {
+        await resolveActiveClinicId();
+      }
       router.refresh();
       router.replace("/");
     } catch {
@@ -237,6 +265,34 @@ export default function LoginPage() {
                   ? "Digite seu e-mail para receber um código de acesso"
                   : `Enviamos um código para ${trimmedEmail}`}
               </p>
+              {step === "email" ? (
+                <div className="mx-auto mt-5 flex w-full max-w-[360px] items-center gap-2 rounded-full border border-neutral-200/80 bg-white/70 p-1">
+                  <button
+                    type="button"
+                    onClick={() => updateIntent("patient")}
+                    className={cn(
+                      intentBtnBase,
+                      intent === "patient" ? "bg-primary text-primary-foreground shadow-sm" : "text-text-secondary hover:bg-neutral-100/90",
+                    )}
+                    aria-pressed={intent === "patient"}
+                  >
+                    Entrar como Paciente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateIntent("professional")}
+                    className={cn(
+                      intentBtnBase,
+                      intent === "professional"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-text-secondary hover:bg-neutral-100/90",
+                    )}
+                    aria-pressed={intent === "professional"}
+                  >
+                    Entrar como Nutricionista
+                  </button>
+                </div>
+              ) : null}
             </header>
 
             <LoginGlassPanel className="w-full">
@@ -283,6 +339,9 @@ export default function LoginPage() {
                     ) : (
                       <>Você receberá um código de {OTP_CODE_LENGTH} dígitos no e-mail.</>
                     )}
+                  </p>
+                  <p className="text-center text-[12px] font-semibold text-neutral-600">
+                    Caminho selecionado: {intent === "patient" ? "Paciente" : "Nutricionista"}
                   </p>
 
                   {status ? (

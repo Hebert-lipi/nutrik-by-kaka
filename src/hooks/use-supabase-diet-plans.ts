@@ -16,37 +16,62 @@ import {
 import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
 import { measurePerf } from "@/lib/perf/perf-metrics";
 
-const PLANS_CACHE_TTL_MS = 45_000;
+const PLANS_CACHE_TTL_MS = 5 * 60_000;
 let plansCache: { data: DraftPlan[]; fetchedAt: number } | null = null;
 let inflightPlansRefresh: Promise<void> | null = null;
+let plansLoadingState = true;
+let plansErrorState: string | null = null;
+let plansBootstrapped = false;
+let plansAuthSub: { unsubscribe: () => void } | null = null;
+const plansSubscribers = new Set<(state: { plans: DraftPlan[]; loading: boolean; error: string | null }) => void>();
+
+function plansSnapshot() {
+  return {
+    plans: plansCache?.data ?? [],
+    loading: plansLoadingState,
+    error: plansErrorState,
+  };
+}
+
+function emitPlansState() {
+  const snap = plansSnapshot();
+  for (const cb of plansSubscribers) cb(snap);
+}
+
+async function getCurrentUserId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data.session?.user?.id ?? null;
+}
 
 export type SavePlanFromBuilderMode = "draft" | "publish";
 
 export function useSupabaseDietPlans() {
-  const [plans, setPlans] = React.useState<DraftPlan[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const [state, setState] = React.useState(() => plansSnapshot());
 
   const refresh = React.useCallback(async (force = false) => {
     const cached = plansCache;
-    const cacheFresh = !force && cached && Date.now() - cached.fetchedAt < PLANS_CACHE_TTL_MS;
-    if (cacheFresh) {
-      setPlans(cached.data);
-      setLoading(false);
-      return;
+    const cacheFresh = Boolean(!force && cached && Date.now() - cached.fetchedAt < PLANS_CACHE_TTL_MS);
+    if (cached && !force) {
+      plansLoadingState = false;
+      emitPlansState();
+      if (cacheFresh) return;
     }
     if (inflightPlansRefresh && !force) {
-      await inflightPlansRefresh;
+      // Evita duplicar chamadas em montagens paralelas.
       return;
     }
     const run = async () => {
-      setLoading(true);
-      setError(null);
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData.user) {
-        setPlans([]);
-        setLoading(false);
-        if (userErr) setError(userErr.message);
+      if (!plansCache || force) {
+        plansLoadingState = true;
+        emitPlansState();
+      }
+      plansErrorState = null;
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        plansCache = { data: [], fetchedAt: Date.now() };
+        plansLoadingState = false;
+        emitPlansState();
         return;
       }
 
@@ -56,20 +81,20 @@ export function useSupabaseDietPlans() {
           supabase
             .from("diet_plans")
             .select(DIET_PLAN_SELECT_LIST)
-            .eq("nutritionist_user_id", userData.user.id)
+            .eq("nutritionist_user_id", userId)
             .order("updated_at", { ascending: false }),
         force ? "force" : "cached-miss",
       );
 
       if (qErr) {
-        setError(qErr.message);
-        setPlans([]);
+        plansErrorState = qErr.message;
+        plansCache = { data: [], fetchedAt: Date.now() };
       } else {
         const mapped = (data as DietPlanListRow[]).map(dietPlanListRowToDraftPlan);
-        setPlans(mapped);
         plansCache = { data: mapped, fetchedAt: Date.now() };
       }
-      setLoading(false);
+      plansLoadingState = false;
+      emitPlansState();
     };
     inflightPlansRefresh = run().finally(() => {
       inflightPlansRefresh = null;
@@ -78,17 +103,32 @@ export function useSupabaseDietPlans() {
   }, []);
 
   React.useEffect(() => {
-    void refresh();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void refresh(true);
-    });
-    return () => sub.subscription.unsubscribe();
+    const cb = (next: { plans: DraftPlan[]; loading: boolean; error: string | null }) => setState(next);
+    plansSubscribers.add(cb);
+    cb(plansSnapshot());
+
+    if (!plansBootstrapped) {
+      plansBootstrapped = true;
+      void refresh();
+    }
+    if (!plansAuthSub) {
+      const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+          void refresh(true);
+        }
+      });
+      plansAuthSub = sub.subscription;
+    }
+
+    return () => {
+      plansSubscribers.delete(cb);
+    };
   }, [refresh]);
 
   const upsertPlan = React.useCallback(
     async (plan: DraftPlan) => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData.user) throw new Error(userErr?.message ?? "Não autenticado");
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error("Não autenticado");
 
       const normalized = normalizePlan(plan);
       const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
@@ -110,7 +150,7 @@ export function useSupabaseDietPlans() {
 
       const row = {
         id: normalized.id,
-        nutritionist_user_id: userData.user.id,
+        nutritionist_user_id: userId,
         patient_id: patientId,
         title: normalized.name.trim(),
         description: normalized.description.trim(),
@@ -122,7 +162,7 @@ export function useSupabaseDietPlans() {
 
       const { error: upErr } = await measurePerf("dietPlans.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }));
       if (upErr) throw new Error(upErr.message);
-      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userData.user.id);
+      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userId);
       await refresh(true);
     },
     [refresh],
@@ -134,8 +174,8 @@ export function useSupabaseDietPlans() {
    */
   const savePlanFromBuilder = React.useCallback(
     async (plan: DraftPlan, mode: SavePlanFromBuilderMode = "draft") => {
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData.user) throw new Error(userErr?.message ?? "Não autenticado");
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error("Não autenticado");
 
       const normalized = normalizePlan(plan);
       const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
@@ -189,7 +229,7 @@ export function useSupabaseDietPlans() {
 
       const row = {
         id: normalized.id,
-        nutritionist_user_id: userData.user.id,
+        nutritionist_user_id: userId,
         patient_id: patientId,
         title: normalized.name.trim(),
         description: normalized.description.trim(),
@@ -218,7 +258,7 @@ export function useSupabaseDietPlans() {
         }
       }
 
-      await insertDietPlanVersion(normalized.id, structure, userData.user.id);
+      await insertDietPlanVersion(normalized.id, structure, userId);
       await refresh(true);
     },
     [refresh],
@@ -250,7 +290,7 @@ export function useSupabaseDietPlans() {
 
   const togglePublish = React.useCallback(
     async (id: string) => {
-      const current = plans.find((p) => p.id === id);
+      const current = state.plans.find((p) => p.id === id);
       if (!current) return;
       const nextStatus = current.status === "published" ? "draft" : "published";
       if (
@@ -261,8 +301,7 @@ export function useSupabaseDietPlans() {
         throw new Error("Selecione um paciente neste plano no editor antes de publicar.");
       }
 
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id ?? null;
+      const uid = await getCurrentUserId();
 
       if (nextStatus === "published") {
         if (current.planKind === "patient_plan" && current.linkedPatientId) {
@@ -318,13 +357,13 @@ export function useSupabaseDietPlans() {
       }
       await refresh(true);
     },
-    [plans, refresh],
+    [state.plans, refresh],
   );
 
   return {
-    plans,
-    loading,
-    error,
+    plans: state.plans,
+    loading: state.loading,
+    error: state.error,
     upsertPlan,
     savePlanFromBuilder,
     fetchPlanById,

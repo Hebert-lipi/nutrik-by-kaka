@@ -21,6 +21,7 @@ export function useDashboardSnapshot(): DashboardSnapshotState {
   const [versionEvents, setVersionEvents] = React.useState<DietPlanVersionEvent[]>([]);
 
   React.useEffect(() => {
+    if (lp || lpl) return;
     let cancelled = false;
     void (async () => {
       const { data, error: vErr } = await supabase

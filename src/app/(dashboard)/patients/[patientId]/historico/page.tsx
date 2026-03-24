@@ -116,49 +116,51 @@ export default function PatientHistoricoPage() {
         </p>
       </div>
 
-      <Card className="border-neutral-200/55 shadow-premium-sm">
+      <Card className="border-neutral-200/55 shadow-premium-sm lg:max-h-[620px]">
         <CardHeader className="border-b border-neutral-100/90 pb-4">
           <p className="text-title16 font-semibold text-text-primary">Eventos</p>
           <p className="mt-1 text-small12 text-text-secondary">Ordenados do mais recente ao mais antigo</p>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="min-h-0 p-0">
           {events.length === 0 ? (
             <div className="px-5 py-14 text-center text-body14 font-semibold text-text-muted">
               {lpl || adherenceLoading ? "Carregando eventos..." : "Nenhum evento para exibir ainda."}
             </div>
           ) : (
-            <ul className="divide-y divide-neutral-100/90">
-              {events.map((ev, i) => (
-                <li key={ev.id} className="relative flex gap-4 px-4 py-4 md:px-6">
-                  <div className="flex flex-col items-center">
-                    <span
-                      className={cn(
-                        "z-[1] h-3 w-3 shrink-0 rounded-full ring-4 ring-bg-0",
-                        ev.kind === "plan" && "bg-primary",
-                        ev.kind === "patient" && "bg-secondary",
-                        ev.kind === "note" && "bg-yellow/80",
-                        ev.kind === "adherence" && "bg-neutral-400",
-                      )}
-                    />
-                    {i < events.length - 1 ? (
-                      <span className="mt-0.5 w-px flex-1 min-h-[1.5rem] bg-gradient-to-b from-neutral-200 to-transparent" aria-hidden />
-                    ) : null}
-                  </div>
-                  <div className="min-w-0 flex-1 pb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-text-primary">{ev.title}</p>
-                      <Chip tone="muted" className="text-[10px]">
-                        {ev.kind === "plan" ? "Plano" : ev.kind === "patient" ? "Cadastro" : ev.kind === "note" ? "Ficha" : "Portal"}
-                      </Chip>
+            <div className="max-h-[520px] overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+              <ul className="divide-y divide-neutral-100/90">
+                {events.map((ev, i) => (
+                  <li key={ev.id} className="relative flex gap-4 px-4 py-4 md:px-6">
+                    <div className="flex flex-col items-center">
+                      <span
+                        className={cn(
+                          "z-[1] h-3 w-3 shrink-0 rounded-full ring-4 ring-bg-0",
+                          ev.kind === "plan" && "bg-primary",
+                          ev.kind === "patient" && "bg-secondary",
+                          ev.kind === "note" && "bg-yellow/80",
+                          ev.kind === "adherence" && "bg-neutral-400",
+                        )}
+                      />
+                      {i < events.length - 1 ? (
+                        <span className="mt-0.5 w-px flex-1 min-h-[1.5rem] bg-gradient-to-b from-neutral-200 to-transparent" aria-hidden />
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-[11px] font-semibold text-text-secondary">{ev.detail}</p>
-                    <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-                      {formatPatientDateTime(ev.at)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    <div className="min-w-0 flex-1 pb-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-text-primary">{ev.title}</p>
+                        <Chip tone="muted" className="text-[10px]">
+                          {ev.kind === "plan" ? "Plano" : ev.kind === "patient" ? "Cadastro" : ev.kind === "note" ? "Ficha" : "Portal"}
+                        </Chip>
+                      </div>
+                      <p className="mt-1 text-[11px] font-semibold text-text-secondary">{ev.detail}</p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-text-muted">
+                        {formatPatientDateTime(ev.at)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </CardContent>
       </Card>

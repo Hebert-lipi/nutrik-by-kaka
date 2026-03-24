@@ -1,7 +1,9 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { workspaceCutoverEnabled } from "@/lib/feature-flags";
 
 /** Roles persistidos em `public.profiles.role`. */
 export type UserRole = "patient" | "nutritionist" | "admin";
+export type EntryIntent = "patient" | "professional";
 
 /**
  * Contexto de acesso: autorização clínica vem de `profiles.role`, não de “ter criado dados”.
@@ -25,6 +27,11 @@ export type UserAccessContext = {
 
 export function isClinicalRole(role: UserRole): boolean {
   return role === "nutritionist" || role === "admin";
+}
+
+export function parseEntryIntent(raw: string | null | undefined): EntryIntent | null {
+  if (raw === "patient" || raw === "professional") return raw;
+  return null;
 }
 
 function parseUserRole(raw: unknown): UserRole {
@@ -52,9 +59,16 @@ export async function getUserContext(
 ): Promise<UserAccessContext> {
   await runClaimPatientByEmail(supabase);
 
-  const [patientRow, profileRow] = await Promise.all([
+  const [patientRow, profileRow, clinicMembershipRow] = await Promise.all([
     supabase.from("patients").select("id").eq("auth_user_id", user.id).maybeSingle(),
     supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("clinic_members")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("member_status", "active")
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const patientId =
@@ -64,7 +78,8 @@ export async function getUserContext(
 
   const isPatient = Boolean(patientId);
   const role: UserRole = profileRow.error ? "patient" : parseUserRole(profileRow.data);
-  const isClinicalStaff = isClinicalRole(role);
+  const hasClinicMembership = Boolean(clinicMembershipRow.data && !clinicMembershipRow.error);
+  const isClinicalStaff = workspaceCutoverEnabled ? hasClinicMembership : isClinicalRole(role);
 
   return {
     user,
@@ -76,8 +91,12 @@ export async function getUserContext(
   };
 }
 
-/** Destino após login ou `/` autenticado: staff → área clínica; caso contrário → portal. */
-export function resolvePostAuthPath(ctx: UserAccessContext): string {
+/** Destino após login ou `/` autenticado, opcionalmente respeitando intenção de entrada. */
+export function resolvePostAuthPath(ctx: UserAccessContext, intent?: EntryIntent | null): string {
+  if (intent === "patient") return "/meu-plano";
+  if (intent === "professional") {
+    return ctx.isClinicalStaff ? "/dashboard" : "/acesso-profissional";
+  }
   if (ctx.isClinicalStaff) return "/dashboard";
   return "/meu-plano";
 }
