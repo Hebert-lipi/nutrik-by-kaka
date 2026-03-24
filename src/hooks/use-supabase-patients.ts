@@ -12,7 +12,10 @@ import type {
 import { patientRowToDraftPatient, type PatientRow } from "@/lib/supabase/plan-mapper";
 import { measurePerf } from "@/lib/perf/perf-metrics";
 import { workspaceCutoverEnabled, workspaceDualReadEnabled } from "@/lib/feature-flags";
-import { resolveActiveClinicId } from "@/lib/clinic-context";
+import { resolveActiveClinicId, resolveClinicIdForPatientInsert } from "@/lib/clinic-context";
+
+const PATIENT_CREATE_USER_MESSAGE =
+  "Não foi possível criar o paciente. Tente novamente ou entre em contato com o suporte.";
 
 const PATIENTS_CACHE_TTL_MS = 5 * 60_000;
 let patientsCache: { data: DraftPatient[]; fetchedAt: number } | null = null;
@@ -176,18 +179,20 @@ export function useSupabasePatients() {
       const userId = await getCurrentUserId();
       if (!userId) throw new Error("Não autenticado");
 
+      const clinicId = await resolveClinicIdForPatientInsert();
+      if (!clinicId) {
+        console.error("[nutrik] addPatient: no clinic_id (sem membership ativo ou RPC falhou)", { userId });
+        throw new Error(PATIENT_CREATE_USER_MESSAGE);
+      }
+
       const base = {
         nutritionist_user_id: userId,
         full_name: input.name.trim(),
         email: input.email.trim().toLowerCase(),
         status: "active" as const,
         notes: "clinicalNotes" in input ? input.clinicalNotes.trim() : "",
-        clinic_id: workspaceDualReadEnabled || workspaceCutoverEnabled ? await resolveActiveClinicId() : null,
+        clinic_id: clinicId,
       };
-
-      if (workspaceCutoverEnabled && !base.clinic_id) {
-        throw new Error("Clínica ativa não encontrada para criação do paciente.");
-      }
 
       const extended =
         "phone" in input
@@ -209,7 +214,10 @@ export function useSupabasePatients() {
           : base;
 
       const { error: insErr } = await supabase.from("patients").insert(extended);
-      if (insErr) throw new Error(insErr.message);
+      if (insErr) {
+        console.error("[nutrik] patients.insert failed", insErr);
+        throw new Error(PATIENT_CREATE_USER_MESSAGE);
+      }
       await refresh(true);
     },
     [refresh],

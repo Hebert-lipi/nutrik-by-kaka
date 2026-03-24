@@ -30,19 +30,35 @@ export function setActiveClinicCookie(clinicId: string | null): void {
   activeClinicCache = { id: clinicId, fetchedAt: Date.now() };
 }
 
+/** Preferência do cookie + primeiro membership ativo em `clinic_members` (RPC no Supabase). */
+async function fetchResolvedActiveClinicIdFromServer(): Promise<string | null> {
+  const preferred = getPreferredActiveClinicIdFromCookie();
+  const { data, error } = await supabase.rpc("resolve_active_clinic_id", {
+    p_preferred_clinic_id: preferred,
+  });
+  if (error) {
+    console.error("[nutrik] resolve_active_clinic_id RPC failed", error);
+    return null;
+  }
+  const resolved = typeof data === "string" && data.length > 0 ? data : null;
+  if (resolved) setActiveClinicCookie(resolved);
+  activeClinicCache = { id: resolved, fetchedAt: Date.now() };
+  return resolved;
+}
+
 export async function resolveActiveClinicId(): Promise<string | null> {
   if (!workspaceDualReadEnabled && !workspaceCutoverEnabled) return null;
   const cached = activeClinicCache;
   if (cached && Date.now() - cached.fetchedAt < ACTIVE_CLINIC_CACHE_TTL_MS) {
     return cached.id;
   }
-  const preferred = getPreferredActiveClinicIdFromCookie();
-  const { data, error } = await supabase.rpc("resolve_active_clinic_id", {
-    p_preferred_clinic_id: preferred,
-  });
-  if (error) return null;
-  const resolved = typeof data === "string" && data.length > 0 ? data : null;
-  if (resolved) setActiveClinicCookie(resolved);
-  activeClinicCache = { id: resolved, fetchedAt: Date.now() };
-  return resolved;
+  return fetchResolvedActiveClinicIdFromServer();
+}
+
+/**
+ * Resolve clínica para operações que exigem `clinic_id` na BD (ex.: insert em `patients`),
+ * independentemente das flags de dual-read/cutover no cliente.
+ */
+export async function resolveClinicIdForPatientInsert(): Promise<string | null> {
+  return fetchResolvedActiveClinicIdFromServer();
 }
