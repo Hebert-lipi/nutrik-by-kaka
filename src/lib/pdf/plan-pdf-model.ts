@@ -1,4 +1,5 @@
 import type { DraftPatient, DraftPlan, DraftPlanFoodOption } from "@/lib/draft-storage";
+import { getPatientFacingMeals } from "@/lib/clinical/patient-plan";
 import { sumMealNutrition } from "@/lib/nutrition/food-math";
 import { buildShoppingListFromPlan as buildShoppingListFromClinical } from "@/lib/clinical/shopping-list";
 
@@ -89,21 +90,23 @@ export function buildShoppingListFromPlan(plan: DraftPlan): PlanPdfShoppingItem[
 export function buildRecipesFromPlan(plan: DraftPlan): PlanPdfRecipe[] {
   const out: PlanPdfRecipe[] = [];
   const seen = new Set<string>();
-  for (const meal of plan.meals) {
+  const meals = getPatientFacingMeals(plan);
+  for (const meal of meals) {
     for (const group of meal.groups) {
       for (const opt of group.options) {
         const prep = opt.recipe.trim();
-        if (!prep) continue;
+        const img = opt.imageUrl?.trim() || null;
+        if (!prep && !img) continue;
         const title = opt.name.trim() || "Receita sem nome";
-        const key = `${title.toLowerCase()}::${prep}`;
+        const key = `${title.toLowerCase()}::${prep}::${img ?? ""}`;
         if (seen.has(key)) continue;
         seen.add(key);
         out.push({
           title,
           sourceMealName: meal.name || "Refeição",
           ingredients: [`${title} — ${qtyLabel(opt)}`],
-          preparation: prep,
-          imageUrl: opt.imageUrl?.trim() || null,
+          preparation: prep || "—",
+          imageUrl: img,
         });
       }
     }
@@ -133,7 +136,7 @@ export function patientSummary(patient: DraftPatient | null, plan: DraftPlan): A
 }
 
 export function mealMacroSummary(plan: DraftPlan): Array<{ mealId: string; kcal: number; protein: number; carbs: number; fat: number }> {
-  return plan.meals.map((m) => {
+  return getPatientFacingMeals(plan).map((m) => {
     const s = sumMealNutrition(m);
     return { mealId: m.id, kcal: Math.round(s.kcal), protein: s.protein, carbs: s.carbs, fat: s.fat };
   });

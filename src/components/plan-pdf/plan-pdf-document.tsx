@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { DraftPatient, DraftPlan } from "@/lib/draft-storage";
+import { getPatientFacingMeals } from "@/lib/clinical/patient-plan";
 import {
   buildRecipesFromPlan,
   buildShoppingListFromPlan,
@@ -50,6 +51,7 @@ export function PlanPdfDocument({
   const patientHeaderValue = pSummary.find((x) => x.label === "Paciente")?.value ?? "Não informado";
   const shopping = shoppingOverride && shoppingOverride.length > 0 ? shoppingOverride : buildShoppingListFromPlan(plan);
   const recipes = buildRecipesFromPlan(plan);
+  const pdfMeals = getPatientFacingMeals(plan);
   const macroMap = new Map(mealMacroSummary(plan).map((x) => [x.mealId, x]));
   React.useEffect(() => {
     const calc = () => {
@@ -67,7 +69,7 @@ export function PlanPdfDocument({
       window.clearTimeout(id);
       window.removeEventListener("resize", calc);
     };
-  }, [plan.id, plan.currentVersionNumber, variant, plan.meals.length, plan.description]);
+  }, [plan.id, plan.currentVersionNumber, variant, pdfMeals.length, plan.description]);
 
   return (
     <article ref={rootRef} className="pdf-doc relative mx-auto w-full max-w-[860px] bg-white px-12 py-16 text-[13px] leading-[1.7] text-[#1f2937]">
@@ -120,7 +122,7 @@ export function PlanPdfDocument({
         <section className="pdf-block-shell pdf-block-diet relative z-10 mt-[3.3rem] px-5 pt-4 pb-7">
           <h2 className="pdf-heading pdf-keep-with-next pdf-section-title text-[22px] font-black tracking-[0.01em] text-[#0b1322]">Plano alimentar</h2>
           <div className="pdf-meals-list mt-[1.35rem] space-y-11">
-            {plan.meals.map((meal, idx) => {
+            {pdfMeals.map((meal, idx) => {
               const mm = macroMap.get(meal.id);
               return (
                 <section key={meal.id} className="pdf-meal-block pdf-avoid-break border-t border-[#e4ebf0] pt-[0.9rem]">
@@ -216,11 +218,11 @@ export function PlanPdfDocument({
                 <p className="mt-1 text-[12px] text-[#64748b]">Refeição: {r.sourceMealName}</p>
                 {r.imageUrl ? (
                   <div className="mt-2.5">
+                    {/* Sem crossOrigin: URLs do Storage sem CORS falham com anonymous e somem no html2pdf. */}
                     <img
                       src={r.imageUrl}
                       alt={`Imagem da receita ${r.title}`}
                       className="max-h-[180px] w-auto max-w-full rounded-lg border border-[#e5e7eb] object-contain"
-                      crossOrigin="anonymous"
                     />
                   </div>
                 ) : null}
