@@ -1,6 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserContext, isInternalWorkspacePath, parseEntryIntent, resolvePostAuthPath } from "@/lib/auth/user-context";
+import {
+  getUserContext,
+  isInternalWorkspacePath,
+  parseEntryIntent,
+  resolvePostAuthPath,
+} from "@/lib/auth/user-context";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
 function applySupabaseCookies(from: NextResponse, to: NextResponse) {
@@ -55,6 +60,42 @@ export async function middleware(request: NextRequest) {
 
   const ctx = await getUserContext(supabase, user);
 
+  if (pathname === "/profissional/como-usa" || pathname.startsWith("/profissional/como-usa/")) {
+    if (ctx.isClinicalStaff) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+    if (intent === "patient") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/meu-plano";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+  }
+
+  if (
+    pathname === "/acesso-profissional" ||
+    pathname.startsWith("/acesso-profissional/") ||
+    pathname === "/solicitar-acesso-profissional" ||
+    pathname.startsWith("/solicitar-acesso-profissional/")
+  ) {
+    if (intent !== "professional") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/meu-plano";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+    if (ctx.isClinicalStaff) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+    if (ctx.onboardingProfessionalChoice !== "clinic") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/profissional/como-usa";
+      return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
+    }
+  }
+
   if (pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = resolvePostAuthPath(ctx, intent);
@@ -77,7 +118,7 @@ export async function middleware(request: NextRequest) {
   // Sem role clínico: não acede à área interna nem PDF clínico (autorização explícita).
   if (!ctx.isClinicalStaff && isInternalWorkspacePath(pathname)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/meu-plano";
+    url.pathname = intent === "professional" ? "/profissional/como-usa" : "/meu-plano";
     return applySupabaseCookies(supabaseResponse, NextResponse.redirect(url));
   }
 

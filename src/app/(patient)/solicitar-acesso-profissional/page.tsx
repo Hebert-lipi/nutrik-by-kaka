@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   fetchMyProfessionalRequests,
   fetchMyProfileRole,
+  fetchMyProfessionalOnboardingChoice,
   submitProfessionalAccessRequest,
 } from "@/lib/supabase/professional-access-requests";
 import { isClinicalRole } from "@/lib/auth/user-context";
@@ -35,10 +36,14 @@ export default function SolicitarAcessoProfissionalPage() {
         router.replace("/login");
         return;
       }
-      const role = await fetchMyProfileRole();
+      const [role, choice] = await Promise.all([fetchMyProfileRole(), fetchMyProfessionalOnboardingChoice()]);
       if (c) return;
       if (role && isClinicalRole(role)) {
         router.replace("/dashboard");
+        return;
+      }
+      if (choice !== "clinic") {
+        router.replace("/profissional/como-usa");
         return;
       }
       const mine = await fetchMyProfessionalRequests();
@@ -94,8 +99,8 @@ export default function SolicitarAcessoProfissionalPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Profissional</p>
         <h1 className="mt-1 text-title16 font-semibold text-text-primary md:text-h4">Solicitar acesso à área clínica</h1>
         <p className="mt-2 max-w-2xl text-small12 font-semibold leading-relaxed text-text-secondary">
-          Se você é nutricionista e usa o Nutrik também como paciente, pode pedir acesso para gerir a sua prática. O pedido é analisado pela
-          clínica — <strong className="text-text-primary">não há liberação automática</strong>.
+          Este formulário é só para quem faz parte de uma clínica no Nutrik. O pedido é analisado por um administrador —{" "}
+          <strong className="text-text-primary">não há liberação automática</strong>.
         </p>
       </div>
 
@@ -171,8 +176,8 @@ export default function SolicitarAcessoProfissionalPage() {
               <Button type="submit" variant="primary" size="md" className="rounded-full px-8 font-bold" disabled={busy || alreadyPending}>
                 {busy ? "Enviando…" : "Enviar pedido"}
               </Button>
-              <Link href="/meu-plano" className={buttonClassName("outline", "md", "rounded-full px-6")}>
-                Voltar ao meu plano
+              <Link href="/acesso-profissional" className={buttonClassName("outline", "md", "rounded-full px-6")}>
+                Voltar
               </Link>
             </div>
           </form>

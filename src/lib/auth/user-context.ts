@@ -12,6 +12,11 @@ export type EntryIntent = "patient" | "professional";
 export type UserAccessContext = {
   user: User;
   role: UserRole;
+  /**
+   * Escolha persistida em `profiles.onboarding_professional_choice` (fluxo clínica com aprovação).
+   * Usada só para gates de rota no middleware; não concede privilégios sem `isClinicalStaff`.
+   */
+  onboardingProfessionalChoice: "clinic" | null;
   /** Staff clínico: `nutritionist` ou `admin`. */
   isClinicalStaff: boolean;
   /** Existe ficha com `auth_user_id` = utilizador (após claim por e-mail). */
@@ -61,7 +66,11 @@ export async function getUserContext(
 
   const [patientRow, profileRow, clinicMembershipRow] = await Promise.all([
     supabase.from("patients").select("id").eq("auth_user_id", user.id).maybeSingle(),
-    supabase.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("role, onboarding_professional_choice")
+      .eq("id", user.id)
+      .maybeSingle(),
     supabase
       .from("clinic_members")
       .select("id")
@@ -78,12 +87,17 @@ export async function getUserContext(
 
   const isPatient = Boolean(patientId);
   const role: UserRole = profileRow.error ? "patient" : parseUserRole(profileRow.data);
+  const rawChoice = profileRow.data
+    ? (profileRow.data as { onboarding_professional_choice?: string | null }).onboarding_professional_choice
+    : null;
+  const onboardingProfessionalChoice: "clinic" | null = rawChoice === "clinic" ? "clinic" : null;
   const hasClinicMembership = Boolean(clinicMembershipRow.data && !clinicMembershipRow.error);
   const isClinicalStaff = workspaceCutoverEnabled ? hasClinicMembership : isClinicalRole(role);
 
   return {
     user,
     role,
+    onboardingProfessionalChoice,
     isClinicalStaff,
     isPatient,
     isNutritionist: isClinicalStaff,
@@ -95,7 +109,7 @@ export async function getUserContext(
 export function resolvePostAuthPath(ctx: UserAccessContext, intent?: EntryIntent | null): string {
   if (intent === "patient") return "/meu-plano";
   if (intent === "professional") {
-    return ctx.isClinicalStaff ? "/dashboard" : "/acesso-profissional";
+    return ctx.isClinicalStaff ? "/dashboard" : "/profissional/como-usa";
   }
   if (ctx.isClinicalStaff) return "/dashboard";
   return "/meu-plano";

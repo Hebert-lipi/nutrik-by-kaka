@@ -276,7 +276,7 @@ export default function LoginPage() {
                     )}
                     aria-pressed={intent === "patient"}
                   >
-                    Entrar como Paciente
+                    Entrar como paciente
                   </button>
                   <button
                     type="button"
@@ -289,7 +289,7 @@ export default function LoginPage() {
                     )}
                     aria-pressed={intent === "professional"}
                   >
-                    Entrar como Nutricionista
+                    Sou nutricionista
                   </button>
                 </div>
               ) : null}
@@ -341,7 +341,7 @@ export default function LoginPage() {
                     )}
                   </p>
                   <p className="text-center text-[12px] font-semibold text-neutral-600">
-                    Caminho selecionado: {intent === "patient" ? "Paciente" : "Nutricionista"}
+                    Caminho selecionado: {intent === "patient" ? "Paciente" : "Sou nutricionista"}
                   </p>
 
                   {status ? (

@@ -16,7 +16,6 @@ import { getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
 import { buildShoppingListFromPlan, groupShoppingByCategory } from "@/lib/clinical/shopping-list";
 import { fetchShoppingSnapshot } from "@/lib/supabase/shopping-lists";
 import { recordPerfMetric } from "@/lib/perf/perf-metrics";
-import { ProfessionalAccessTeaser } from "@/components/patient-portal/professional-access-teaser";
 
 const POLL_MS = 22_000;
 
@@ -183,7 +182,6 @@ export default function MeuPlanoPage() {
             Quando a nutricionista publicar o plano vinculado ao seu cadastro, ele aparecerá aqui.
           </p>
         </div>
-        <ProfessionalAccessTeaser />
       </div>
     );
   }
@@ -262,8 +260,6 @@ export default function MeuPlanoPage() {
           </CardContent>
         </Card>
       ) : null}
-
-      <ProfessionalAccessTeaser />
     </div>
   );
 }

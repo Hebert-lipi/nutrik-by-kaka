@@ -31,6 +31,21 @@ export async function fetchMyProfileRole(): Promise<UserRole | null> {
   return "patient";
 }
 
+/** Escolha persistida no servidor (fluxo clínica). Não substitui validação em middleware. */
+export async function fetchMyProfessionalOnboardingChoice(): Promise<"clinic" | null> {
+  const { data: u } = await supabase.auth.getUser();
+  const id = u.user?.id;
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("onboarding_professional_choice")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  const c = (data as { onboarding_professional_choice?: string | null }).onboarding_professional_choice;
+  return c === "clinic" ? "clinic" : null;
+}
+
 export async function submitProfessionalAccessRequest(input: {
   fullName: string;
   professionalRegistration?: string;
