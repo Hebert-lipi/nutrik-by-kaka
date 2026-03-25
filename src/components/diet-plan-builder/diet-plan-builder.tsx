@@ -43,23 +43,26 @@ function editorRecoveryKey(planId: string) {
 }
 
 function persistEditorRecovery(plan: DraftPlan) {
+  const payload = JSON.stringify({ savedAt: Date.now(), plan });
+  const key = editorRecoveryKey(plan.id);
   try {
-    sessionStorage.setItem(
-      editorRecoveryKey(plan.id),
-      JSON.stringify({ savedAt: Date.now(), plan }),
-    );
+    sessionStorage.setItem(key, payload);
+    return;
   } catch {
-    /* quota / private mode */
+    /* quota / private mode / políticas IT */
+  }
+  try {
+    localStorage.setItem(key, payload);
+  } catch {
+    /* ignore */
   }
 }
 
-function readEditorRecovery(planId: string): DraftPlan | null {
+function parseRecoveryPayload(raw: string, planId: string, store: Storage, key: string): DraftPlan | null {
   try {
-    const raw = sessionStorage.getItem(editorRecoveryKey(planId));
-    if (!raw) return null;
     const o = JSON.parse(raw) as { savedAt?: number; plan?: unknown };
     if (typeof o.savedAt !== "number" || Date.now() - o.savedAt > EDITOR_RECOVERY_TTL_MS) {
-      sessionStorage.removeItem(editorRecoveryKey(planId));
+      store.removeItem(key);
       return null;
     }
     if (!o.plan || typeof o.plan !== "object") return null;
@@ -70,9 +73,35 @@ function readEditorRecovery(planId: string): DraftPlan | null {
   }
 }
 
-function clearEditorRecovery(planId: string) {
+function readEditorRecovery(planId: string): DraftPlan | null {
+  const key = editorRecoveryKey(planId);
   try {
-    sessionStorage.removeItem(editorRecoveryKey(planId));
+    const fromSession = sessionStorage.getItem(key);
+    if (fromSession) {
+      const p = parseRecoveryPayload(fromSession, planId, sessionStorage, key);
+      if (p) return p;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const fromLocal = localStorage.getItem(key);
+    if (fromLocal) return parseRecoveryPayload(fromLocal, planId, localStorage, key);
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function clearEditorRecovery(planId: string) {
+  const key = editorRecoveryKey(planId);
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.removeItem(key);
   } catch {
     /* ignore */
   }
@@ -84,7 +113,8 @@ async function syncPlanAfterSave(
   planId: string,
   fallback: DraftPlan,
 ): Promise<DraftPlan> {
-  const delaysMs = [0, 280, 650, 1400];
+  /* Redes lentas / DNS corporativo: mais tentativas e espera maior até ~6s. */
+  const delaysMs = [0, 450, 1100, 2400, 4200, 6200];
   for (let i = 0; i < delaysMs.length; i += 1) {
     if (delaysMs[i]! > 0) {
       await new Promise((r) => setTimeout(r, delaysMs[i]));
@@ -99,6 +129,27 @@ async function syncPlanAfterSave(
     { planId, mealsLocal: fallback.meals.length },
   );
   return normalizePlan(fallback);
+}
+
+/** Rede/firewall corporativo pode deixar o fetch pendente sem rejeitar — destrava a UI. */
+const SAVE_FLOW_TIMEOUT_MS = 90_000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(
+        new Error(
+          `${label}: tempo limite (${Math.round(ms / 1000)}s). Verifique a internet ou o firewall da clínica e tente de novo.`,
+        ),
+      );
+    }, ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
 }
 
 function trimPlanForPersistence(plan: DraftPlan): DraftPlan {
@@ -168,6 +219,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const [versionsError, setVersionsError] = React.useState<string | null>(null);
   const [versionListKey, setVersionListKey] = React.useState(0);
   const [savingMode, setSavingMode] = React.useState<null | "draft" | "publish">(null);
+  const savingLockedRef = React.useRef(false);
   const [feedback, setFeedback] = React.useState<BuilderFeedback | null>(null);
 
   React.useEffect(() => {
@@ -324,44 +376,52 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   }
 
   const saveDraft = async () => {
-    if (!plan || savingMode) return;
+    if (!plan || savingLockedRef.current) return;
     const name = plan.name.trim();
     if (!name) {
       setSaveError("Dê um nome ao plano para salvar o rascunho.");
       return;
     }
     setSaveError(null);
+    savingLockedRef.current = true;
     setSavingMode("draft");
     try {
-      const toSave = buildNextPersistedPlan(plan.status);
-      persistEditorRecovery(toSave);
-      await measurePerf("ui.save_plan_draft.total", () => savePlanFromBuilder(toSave, "draft"));
-      setPlan(normalizePlan(toSave));
-      const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
-      setPlan(merged);
-      if (mode !== "new") clearEditorRecovery(toSave.id);
-      setVersionListKey((k) => k + 1);
-      setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-      if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
-      setFeedback({
-        tone: "success",
-        title: "Rascunho salvo com sucesso",
-        body:
-          plan.planKind === "patient_plan"
-            ? "Seu plano foi salvo e ainda não está visível para o paciente."
-            : "Seu modelo foi salvo na biblioteca.",
-      });
+      await withTimeout(
+        (async () => {
+          const toSave = buildNextPersistedPlan(plan.status);
+          persistEditorRecovery(toSave);
+          await measurePerf("ui.save_plan_draft.total", () => savePlanFromBuilder(toSave, "draft"));
+          setPlan(normalizePlan(toSave));
+          const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
+          setPlan(merged);
+          if (mode !== "new") clearEditorRecovery(toSave.id);
+          setVersionListKey((k) => k + 1);
+          setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+          if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
+          setFeedback({
+            tone: "success",
+            title: "Rascunho salvo com sucesso",
+            body:
+              plan.planKind === "patient_plan"
+                ? "Seu plano foi salvo e ainda não está visível para o paciente."
+                : "Seu modelo foi salvo na biblioteca.",
+          });
+        })(),
+        SAVE_FLOW_TIMEOUT_MS,
+        "Salvar rascunho",
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Não foi possível salvar o rascunho.";
       setSaveError(msg);
       setFeedback({ tone: "error", title: "Não foi possível salvar o rascunho.", body: msg });
     } finally {
+      savingLockedRef.current = false;
       setSavingMode(null);
     }
   };
 
   const publishPlan = async () => {
-    if (!plan || savingMode) return;
+    if (!plan || savingLockedRef.current) return;
     const name = plan.name.trim();
     if (!name) {
       setSaveError("Dê um nome ao plano antes de publicar.");
@@ -377,31 +437,39 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       return;
     }
     setSaveError(null);
+    savingLockedRef.current = true;
     setSavingMode("publish");
     try {
-      const toSave = buildNextPersistedPlan("published");
-      persistEditorRecovery(toSave);
-      await measurePerf("ui.publish_plan.total", () => savePlanFromBuilder(toSave, "publish"));
-      setPlan(normalizePlan(toSave));
-      const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
-      setPlan(merged);
-      if (mode !== "new") clearEditorRecovery(toSave.id);
-      setVersionListKey((k) => k + 1);
-      setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-      if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
-      setFeedback({
-        tone: "success",
-        title: "Plano publicado com sucesso",
-        body:
-          plan.planKind === "patient_plan"
-            ? "O plano já está disponível para o paciente."
-            : "O modelo está publicado na sua biblioteca.",
-      });
+      await withTimeout(
+        (async () => {
+          const toSave = buildNextPersistedPlan("published");
+          persistEditorRecovery(toSave);
+          await measurePerf("ui.publish_plan.total", () => savePlanFromBuilder(toSave, "publish"));
+          setPlan(normalizePlan(toSave));
+          const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
+          setPlan(merged);
+          if (mode !== "new") clearEditorRecovery(toSave.id);
+          setVersionListKey((k) => k + 1);
+          setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+          if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
+          setFeedback({
+            tone: "success",
+            title: "Plano publicado com sucesso",
+            body:
+              plan.planKind === "patient_plan"
+                ? "O plano já está disponível para o paciente."
+                : "O modelo está publicado na sua biblioteca.",
+          });
+        })(),
+        SAVE_FLOW_TIMEOUT_MS,
+        "Publicar plano",
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Não foi possível publicar o plano.";
       setSaveError(msg);
       setFeedback({ tone: "error", title: "Não foi possível publicar o plano.", body: msg });
     } finally {
+      savingLockedRef.current = false;
       setSavingMode(null);
     }
   };
@@ -742,7 +810,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
 
       <BuilderFeedbackBanner feedback={feedback} onDismiss={() => setFeedback(null)} />
 
-      <div className="sticky bottom-0 z-20 -mx-4 mt-2 border-t border-neutral-200/70 bg-bg-0/96 px-4 py-3 shadow-[0_-12px_40px_-20px_rgba(15,23,42,0.18)] backdrop-blur-lg md:-mx-6 md:px-6">
+      <div className="sticky bottom-0 z-30 isolate -mx-4 mt-2 border-t border-neutral-200/70 bg-bg-0/96 px-4 py-3 shadow-[0_-12px_40px_-20px_rgba(15,23,42,0.18)] backdrop-blur-lg md:-mx-6 md:px-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <p className="max-w-xl text-small12 font-semibold text-text-muted">
             {savingMode ? (
@@ -759,6 +827,8 @@ export function DietPlanBuilder({ mode, planId }: Props) {
               variant="outline"
               size="md"
               disabled={Boolean(savingMode)}
+              allowPointerEventsWhenDisabled={Boolean(savingMode)}
+              className="cursor-pointer"
               aria-busy={savingMode === "draft"}
               onClick={() => void saveDraft()}
             >
@@ -769,6 +839,8 @@ export function DietPlanBuilder({ mode, planId }: Props) {
               variant="primary"
               size="md"
               disabled={publishBlocked || Boolean(savingMode)}
+              allowPointerEventsWhenDisabled={Boolean(savingMode) && !publishBlocked}
+              className="cursor-pointer"
               aria-busy={savingMode === "publish"}
               title={publishBlocked ? "Selecione um paciente para publicar." : undefined}
               onClick={() => void publishPlan()}

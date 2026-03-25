@@ -7,6 +7,8 @@ type ButtonSize = "sm" | "md" | "lg";
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Evita `pointer-events-none` em `disabled` (útil com tranca em ref no `onClick`). */
+  allowPointerEventsWhenDisabled?: boolean;
 };
 
 export const buttonBaseClass =
@@ -45,7 +47,11 @@ export function Button({
   className,
   variant = "primary",
   size = "md",
+  allowPointerEventsWhenDisabled,
   ...props
 }: ButtonProps) {
-  return <button className={cn(base, variantStyles[variant], sizeStyles[size], className)} {...props} />;
+  const baseClass = allowPointerEventsWhenDisabled
+    ? buttonBaseClass.replace(" disabled:pointer-events-none", " disabled:pointer-events-auto")
+    : base;
+  return <button className={cn(baseClass, variantStyles[variant], sizeStyles[size], className)} {...props} />;
 }
