@@ -52,7 +52,7 @@ export default function ComoUsaNutrikPage() {
       if (!res.ok) {
         setError(
           res.error ??
-            "Não foi possível ativar o modo profissional. Aplique a migration professional_onboarding_solo_clinic no Supabase.",
+            "Não foi possível ativar o modo profissional. Tente de novo em alguns minutos ou contacte o suporte Nutrik.",
         );
         return;
       }

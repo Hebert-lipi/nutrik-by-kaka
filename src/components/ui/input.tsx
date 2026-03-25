@@ -25,7 +25,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       <input
         id={inputId}
         ref={ref}
-        className="h-9 w-full rounded-md border border-neutral-200/90 bg-bg-0 px-3 text-body14 text-text-primary shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus:border-primary/30 focus:ring-2 focus:ring-primary/12 focus-visible:outline-none"
+        aria-invalid={error ? true : undefined}
+        className={cn(
+          "h-9 w-full rounded-md border bg-bg-0 px-3 text-body14 text-text-primary shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-neutral-400 focus-visible:outline-none",
+          error
+            ? "border-orange/55 ring-2 ring-orange/20 focus:border-orange/50 focus:ring-orange/25"
+            : "border-neutral-200/90 focus:border-primary/30 focus:ring-2 focus:ring-primary/12",
+        )}
         {...props}
       />
       {error ? <p className="text-small12 text-orange">{error}</p> : null}

@@ -31,7 +31,7 @@ export function PlanNutritionSummary({ plan, className }: { plan: DraftPlan; cla
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary">Resumo do dia</p>
           <p className="mt-1 text-body14 font-semibold text-text-secondary">
-            Soma das porções com alimento da base e peso (g/ml) informado. Grupos com várias opções somam todas as linhas.
+            Os valores abaixo somam tudo o que está no plano hoje: para cada alimento, use gramas (g) ou mililitros (ml) e, se possível, escolha o alimento na base (assim as calorias e macronutrientes vêm preenchidos). Em grupos com várias opções, todas as linhas entram na soma do dia.
           </p>
         </div>
         <div className="rounded-xl border border-dashed border-neutral-300/80 bg-neutral-50/50 px-4 py-3 text-center lg:min-w-[200px]">

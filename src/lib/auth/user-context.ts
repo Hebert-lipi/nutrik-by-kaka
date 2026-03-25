@@ -92,7 +92,9 @@ export async function getUserContext(
     : null;
   const onboardingProfessionalChoice: "clinic" | null = rawChoice === "clinic" ? "clinic" : null;
   const hasClinicMembership = Boolean(clinicMembershipRow.data && !clinicMembershipRow.error);
-  const isClinicalStaff = workspaceCutoverEnabled ? hasClinicMembership : isClinicalRole(role);
+  /** Com cutover o middleware aceita só clínica; com role em `profiles` o RLS também cobre — exigimos qualquer dos dois para não bloquear quem já é nutritionist sem linha em `clinic_members` ou o inverso após migrações parciais. */
+  const isClinicalStaff =
+    isClinicalRole(role) || (workspaceCutoverEnabled && hasClinicMembership);
 
   return {
     user,

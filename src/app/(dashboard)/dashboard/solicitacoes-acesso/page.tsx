@@ -94,7 +94,7 @@ function SolicitacoesAcessoPageContent() {
         />
         <EmptyState
           title="Acesso restrito a administradores"
-          description="Nutricionistas veem e gerem pacientes e planos; só contas com perfil admin podem aprovar pedidos de acesso profissional. Peça à equipe técnica para promover o seu utilizador a admin no Supabase (profiles.role = 'admin') se for o caso."
+          description="Nutricionistas tratam pacientes e planos no dia a dia. Só utilizadores com perfil de administrador da clínica podem aprovar pedidos de acesso profissional. Se precisar desse tipo de permissão, fale com quem administra a conta da equipa."
         />
       </div>
     );

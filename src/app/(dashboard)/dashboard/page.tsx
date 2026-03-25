@@ -50,12 +50,12 @@ export default function DashboardPage() {
   if (snap.error) {
     return (
       <div className="space-y-4">
-        <PageHeader eyebrow="Resumo clínico" title="Visão geral" description="Dados em tempo real no Supabase." />
+        <PageHeader eyebrow="Resumo clínico" title="Visão geral" description="Resumo dos seus dados na Nutrik." />
         <Card className="border-orange/25 bg-orange/[0.06]">
           <CardContent className="space-y-3 py-8">
             <p className="text-body14 font-semibold text-text-secondary">{snap.error}</p>
             <p className="text-small12 text-text-muted">
-              Aplique o SQL em <span className="font-mono">supabase/migrations/</span> conforme docs/SUPABASE_SETUP.md
+              Verifique a ligação à internet. Se o painel continuar em erro, contacte o suporte — pode ser configuração da conta ou manutenção.
             </p>
             <Button type="button" variant="primary" size="md" onClick={() => router.refresh()}>
               Tentar novamente
@@ -71,7 +71,7 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Resumo clínico"
         title="Visão geral"
-        description="Totais e listas vêm do Supabase (sua conta). Gráficos e métricas operacionais podem ser ligados depois."
+        description="Pacientes, planos e totais refletem o que está guardado na sua conta. Gráficos de evolução e outros indicadores podem ser acrescentados mais tarde."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -120,7 +120,7 @@ export default function DashboardPage() {
           <CardContent className="flex flex-1 flex-col justify-center py-6">
             <EmptyState
               title="Sem série histórica ainda"
-              description="Após conectar Supabase ou API, este bloco exibirá curvas reais de acompanhamento."
+              description="Quando houver histórico de consultas e adesão, as curvas de acompanhamento aparecerão aqui."
               hideIllustration
             />
           </CardContent>

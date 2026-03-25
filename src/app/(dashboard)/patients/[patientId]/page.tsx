@@ -134,7 +134,7 @@ export default function PatientResumoPage() {
     return (
       <EmptyState
         title="Paciente não encontrado"
-        description="Este registro não existe no Supabase ou não pertence à sua conta."
+        description="Este paciente não foi encontrado ou não está associado à sua conta."
         action={{ label: "Ir para pacientes", onClick: () => router.push("/patients") }}
       />
     );

@@ -59,7 +59,7 @@ function DietPlansPageContent() {
       <PageHeader
         eyebrow="Biblioteca"
         title="Planos alimentares"
-        description="Modelos reutilizáveis ou planos vinculados a um paciente. Só após publicar o paciente vê o cardápio no app."
+        description="Modelos reutilizáveis ou planos para um paciente. No construtor, o nome da dieta é obrigatório para guardar. Só depois de publicar é que o paciente vê o cardápio no app."
       />
 
       {error || listError ? (
@@ -215,7 +215,7 @@ function DietPlansPageContent() {
         open={removeId !== null}
         onClose={() => setRemoveId(null)}
         title="Excluir plano"
-        description="O plano será excluído permanentemente no Supabase."
+        description="O plano será apagado de forma permanente e deixará de aparecer na biblioteca."
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRemoveId(null)}>

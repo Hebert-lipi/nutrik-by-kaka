@@ -125,7 +125,7 @@ async function syncPlanAfterSave(
     if (!suspectEmpty) return fresh;
   }
   console.warn(
-    "[Nutrik] Não foi possível confirmar o plano no servidor após salvar; mantendo cópia local enviada ao Supabase.",
+    "[Nutrik] Não foi possível confirmar o plano no servidor após salvar; mantendo cópia local enviada.",
     { planId, mealsLocal: fallback.meals.length },
   );
   return normalizePlan(fallback);
@@ -150,6 +150,19 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   } finally {
     if (timeoutId !== undefined) window.clearTimeout(timeoutId);
   }
+}
+
+function downloadPlanJsonBackup(plan: DraftPlan) {
+  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `nutrik-plano-reserva-${plan.id.slice(0, 8)}.json`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function trimPlanForPersistence(plan: DraftPlan): DraftPlan {
@@ -208,6 +221,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
   const [loaded, setLoaded] = React.useState(false);
   const [notFound, setNotFound] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [planNameError, setPlanNameError] = React.useState<string | null>(null);
   const [lastSaved, setLastSaved] = React.useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [mealDragId, setMealDragId] = React.useState<string | null>(null);
@@ -375,11 +389,28 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     });
   }
 
+  const focusPlanNameField = () => {
+    window.requestAnimationFrame(() => {
+      const el = document.getElementById("nutrik-plan-name-input");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (el instanceof HTMLInputElement) el.focus();
+    });
+  };
+
   const saveDraft = async () => {
     if (!plan || savingLockedRef.current) return;
     const name = plan.name.trim();
     if (!name) {
-      setSaveError("Dê um nome ao plano para salvar o rascunho.");
+      const msg =
+        "O nome da dieta é obrigatório. Preencha o campo no topo da página (cartão «Dados gerais do plano») e tente salvar de novo.";
+      setPlanNameError("Sem o nome, o sistema não consegue identificar o plano na sua biblioteca.");
+      setSaveError(msg);
+      setFeedback({
+        tone: "error",
+        title: "Falta o nome da dieta",
+        body: msg,
+      });
+      focusPlanNameField();
       return;
     }
     setSaveError(null);
@@ -424,7 +455,16 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     if (!plan || savingLockedRef.current) return;
     const name = plan.name.trim();
     if (!name) {
-      setSaveError("Dê um nome ao plano antes de publicar.");
+      const msg =
+        "Antes de publicar, dê um nome à dieta no cartão «Dados gerais do plano» no topo da página.";
+      setPlanNameError("Sem o nome, não é possível publicar.");
+      setSaveError(msg);
+      setFeedback({
+        tone: "error",
+        title: "Falta o nome da dieta",
+        body: msg,
+      });
+      focusPlanNameField();
       return;
     }
     if (plan.planKind === "patient_plan" && !plan.linkedPatientId) {
@@ -527,27 +567,65 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         <PageHeader
           eyebrow="Construtor clínico"
           title={mode === "new" ? "Novo plano alimentar" : "Editar plano alimentar"}
-          description="Use Salvar rascunho para guardar o trabalho. Publicar plano é o que libera o cardápio ao paciente (quando houver vínculo). Cada ação registra revisão com data e responsável."
+          description="Primeiro preencha o nome da dieta (cartão abaixo). Salvar rascunho guarda o trabalho; Publicar plano é o que o paciente vê no app, quando o plano tiver paciente vinculado."
         />
-        <div className="flex flex-wrap gap-2">
-          <Link href="/diet-plans" className={buttonClassName("outline", "md")}>
-            Voltar
-          </Link>
-          <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("outline", "md")}>
-            Visualizar PDF
-          </Link>
-          <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("secondary", "md")}>
-            Baixar PDF
-          </Link>
-          <Button type="button" variant="outline" size="md" onClick={() => setPreviewOpen(true)}>
-            Pré-visualizar
-          </Button>
-          <Button type="button" variant="secondary" size="md" onClick={applyExample}>
-            Carregar exemplo
-          </Button>
-          <Button type="button" variant="secondary" size="md" onClick={() => void duplicateEntirePlanToNew()}>
-            Duplicar plano
-          </Button>
+        <div className="flex min-w-0 max-w-full flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/diet-plans" className={buttonClassName("outline", "md")}>
+              Voltar
+            </Link>
+            <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("outline", "md")}>
+              Visualizar PDF
+            </Link>
+            <Link href={`/pdf/diet-plans/${plan.id}?variant=full`} className={buttonClassName("secondary", "md")}>
+              Baixar PDF
+            </Link>
+            <Button type="button" variant="outline" size="md" onClick={() => setPreviewOpen(true)}>
+              Pré-visualizar
+            </Button>
+            <span className="hidden h-6 w-px shrink-0 bg-neutral-200/90 sm:block" aria-hidden />
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              disabled={Boolean(savingMode)}
+              allowPointerEventsWhenDisabled={Boolean(savingMode)}
+              className="cursor-pointer"
+              aria-busy={savingMode === "draft"}
+              onClick={() => void saveDraft()}
+            >
+              {savingMode === "draft" ? "Salvando…" : "Salvar rascunho"}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={publishBlocked || Boolean(savingMode)}
+              allowPointerEventsWhenDisabled={Boolean(savingMode) && !publishBlocked}
+              className="cursor-pointer"
+              aria-busy={savingMode === "publish"}
+              title={publishBlocked ? "Selecione um paciente para publicar." : undefined}
+              onClick={() => void publishPlan()}
+            >
+              {savingMode === "publish" ? "Publicando…" : "Publicar plano"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" size="md" onClick={applyExample}>
+              Carregar exemplo
+            </Button>
+            <Button type="button" variant="secondary" size="md" onClick={() => void duplicateEntirePlanToNew()}>
+              Duplicar plano
+            </Button>
+            <button
+              type="button"
+              className="px-1 text-left text-small12 font-semibold text-text-secondary underline decoration-neutral-300 underline-offset-2 hover:text-text-primary"
+              title="Descarrega uma cópia do plano para o seu computador, caso a internet falhe."
+              onClick={() => downloadPlanJsonBackup(plan)}
+            >
+              Guardar cópia no computador
+            </button>
+          </div>
         </div>
       </div>
 
@@ -558,7 +636,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         >
           <p className="text-body14 font-semibold text-text-primary">Selecione um paciente para este plano</p>
           <p className="mt-1 text-small12 font-semibold text-text-secondary">
-            Escolha o paciente abaixo para vincular no Supabase (por exemplo após duplicar um plano). Você pode trocar o paciente a qualquer momento.
+            Escolha o paciente na lista (a mesma da página Pacientes). É necessário para publicar no app do paciente. Pode alterar o vínculo a qualquer momento.
           </p>
           <label htmlFor="nutrik-top-patient-select" className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-text-muted">
             Paciente (obrigatório para publicar)
@@ -595,6 +673,36 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         </div>
       ) : null}
 
+      {saveError ? (
+        <p className="rounded-xl border border-orange/35 bg-orange/10 px-4 py-3 text-small12 font-bold text-text-secondary">{saveError}</p>
+      ) : null}
+
+      <PlanMetaSection
+        name={plan.name}
+        description={plan.description}
+        status={plan.status}
+        patientCount={plan.patientCount}
+        planKind={plan.planKind}
+        linkedPatientId={plan.linkedPatientId}
+        professionalName={plan.professionalName}
+        professionalRegistration={plan.professionalRegistration}
+        patientHeaderLabel={plan.patientHeaderLabel}
+        patients={patients}
+        planNameError={planNameError}
+        onNameChange={(name) => {
+          setPlanNameError(null);
+          updatePlan((p) => ({ ...p, name }));
+        }}
+        onDescriptionChange={(description) => updatePlan((p) => ({ ...p, description }))}
+        onStatusChange={(status) => updatePlan((p) => ({ ...p, status }))}
+        onPatientCountChange={(patientCount) => updatePlan((p) => ({ ...p, patientCount }))}
+        onPlanKindChange={(planKind) => updatePlan((p) => ({ ...p, planKind }))}
+        onLinkedPatientIdChange={(linkedPatientId) => updatePlan((p) => ({ ...p, linkedPatientId }))}
+        onProfessionalNameChange={(professionalName) => updatePlan((p) => ({ ...p, professionalName }))}
+        onProfessionalRegistrationChange={(professionalRegistration) => updatePlan((p) => ({ ...p, professionalRegistration }))}
+        onPatientHeaderLabelChange={(patientHeaderLabel) => updatePlan((p) => ({ ...p, patientHeaderLabel }))}
+      />
+
       <PlanNutritionSummary plan={plan} />
 
       <PlanBuilderContextStrip
@@ -617,9 +725,6 @@ export function DietPlanBuilder({ mode, planId }: Props) {
 
       <PlanPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} plan={plan} patients={patients} />
 
-      {saveError ? (
-        <p className="rounded-xl border border-orange/35 bg-orange/10 px-4 py-3 text-small12 font-bold text-text-secondary">{saveError}</p>
-      ) : null}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-text-muted">
         {lastSaved ? (
           <span className="font-bold text-secondary">Último salvamento hoje: {lastSaved}</span>
@@ -629,34 +734,12 @@ export function DietPlanBuilder({ mode, planId }: Props) {
         <span className="text-text-secondary">Versão em edição: v{plan.currentVersionNumber}</span>
       </div>
 
-      <PlanMetaSection
-        name={plan.name}
-        description={plan.description}
-        status={plan.status}
-        patientCount={plan.patientCount}
-        planKind={plan.planKind}
-        linkedPatientId={plan.linkedPatientId}
-        professionalName={plan.professionalName}
-        professionalRegistration={plan.professionalRegistration}
-        patientHeaderLabel={plan.patientHeaderLabel}
-        patients={patients}
-        onNameChange={(name) => updatePlan((p) => ({ ...p, name }))}
-        onDescriptionChange={(description) => updatePlan((p) => ({ ...p, description }))}
-        onStatusChange={(status) => updatePlan((p) => ({ ...p, status }))}
-        onPatientCountChange={(patientCount) => updatePlan((p) => ({ ...p, patientCount }))}
-        onPlanKindChange={(planKind) => updatePlan((p) => ({ ...p, planKind }))}
-        onLinkedPatientIdChange={(linkedPatientId) => updatePlan((p) => ({ ...p, linkedPatientId }))}
-        onProfessionalNameChange={(professionalName) => updatePlan((p) => ({ ...p, professionalName }))}
-        onProfessionalRegistrationChange={(professionalRegistration) => updatePlan((p) => ({ ...p, professionalRegistration }))}
-        onPatientHeaderLabelChange={(patientHeaderLabel) => updatePlan((p) => ({ ...p, patientHeaderLabel }))}
-      />
-
       {mode === "edit" ? (
         <Card className="border-neutral-200/55">
           <CardHeader className="border-b border-neutral-100/90 pb-3">
-            <p className="text-title16 font-semibold text-text-primary">Histórico de versões (Supabase)</p>
+            <p className="text-title16 font-semibold text-text-primary">Histórico de versões guardadas</p>
             <p className="mt-1 text-small12 font-semibold text-text-secondary">
-              Cada “Salvar” ou “Publicar” gera uma linha em <span className="font-mono">diet_plan_versions</span> — o plano atual continua editável.
+              Cada vez que você salva o rascunho ou publica, o sistema regista uma cópia de segurança daquele momento. O plano que você edita agora é sempre a versão atual — as entradas abaixo são só para consulta.
             </p>
           </CardHeader>
           <CardContent className="pt-4">
@@ -691,7 +774,7 @@ export function DietPlanBuilder({ mode, planId }: Props) {
               </ul>
             ) : plan.revisionHistory.length > 0 ? (
               <ul className="max-h-48 space-y-2 overflow-y-auto text-small12">
-                <p className="mb-2 text-[11px] font-semibold text-text-muted">Versões antigas só no JSON (antes da migration).</p>
+                <p className="mb-2 text-[11px] font-semibold text-text-muted">Versões mais antigas guardadas só dentro do ficheiro do plano (antes de existir histórico no servidor).</p>
                 {[...plan.revisionHistory].reverse().map((rev) => (
                   <li
                     key={rev.id}
@@ -803,7 +886,8 @@ export function DietPlanBuilder({ mode, planId }: Props) {
           <p className="text-title16 font-semibold text-text-primary">Publicação</p>
           <p className="text-small12 leading-relaxed text-text-secondary">
             <span className="font-bold text-text-primary">Salvar rascunho</span> grava o que você está editando. Em planos já publicados, o paciente continua vendo a versão anterior até você clicar em{" "}
-            <span className="font-bold text-text-primary">Publicar plano</span>.
+            <span className="font-bold text-text-primary">Publicar plano</span>. Pode ainda usar{" "}
+            <span className="font-bold text-text-primary">Guardar cópia no computador</span> na barra de ações acima se a internet for instável.
           </p>
         </CardContent>
       </Card>
@@ -817,8 +901,14 @@ export function DietPlanBuilder({ mode, planId }: Props) {
               <span className="font-bold text-secondary">
                 {savingMode === "draft" ? "Salvando rascunho…" : "Publicando plano…"}
               </span>
+            ) : !plan.name.trim() ? (
+              <span className="font-bold text-orange">
+                Preencha o <span className="underline decoration-orange/50">nome da dieta</span> no cartão «Dados gerais do plano» no topo — sem ele, salvar e publicar não funcionam.
+              </span>
             ) : (
-              <>Salvar rascunho e Publicar plano ficam com confirmação na tela. Aguarde o término antes de clicar de novo.</>
+              <>
+                Aguarde o término de cada ação antes de clicar de novo. Se aparecer erro, leia a mensagem no topo da página — ela explica o que falta ou o que corrigir.
+              </>
             )}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">

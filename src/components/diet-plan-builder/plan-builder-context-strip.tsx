@@ -57,7 +57,11 @@ export function PlanBuilderContextStrip({
       <div className="border-b border-neutral-100/90 bg-primary/[0.04] px-4 py-3 md:px-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-secondary">Resumo do plano</p>
         <p className="mt-1 text-body14 font-semibold text-text-primary">
-          {mode === "new" ? "Novo plano alimentar" : "Plano alimentar"}
+          {plan.name.trim()
+            ? plan.name.trim()
+            : mode === "new"
+              ? "Novo plano — defina o nome no cartão «Dados gerais» acima"
+              : "Sem nome da dieta — preencha no cartão «Dados gerais» acima"}
         </p>
         <p className="mt-1 text-small12 font-semibold text-text-secondary">
           Tipo:{" "}

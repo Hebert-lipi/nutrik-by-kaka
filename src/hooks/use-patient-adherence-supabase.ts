@@ -30,6 +30,8 @@ function logsToMealState(logs: Awaited<ReturnType<typeof fetchAdherenceLogsForDa
   return { meals, dailyNote };
 }
 
+export type PatientAdherenceController = ReturnType<typeof usePatientAdherenceSupabase>;
+
 export function usePatientAdherenceSupabase(
   patientId: string | undefined,
   planId: string | undefined,

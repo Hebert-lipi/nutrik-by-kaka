@@ -50,7 +50,7 @@ export async function fetchPatientPortalNavContext(
 
   const role = typeof profileRes.data?.role === "string" ? profileRes.data.role : "patient";
   const hasClinicMembership = Boolean(memberRes.data && !memberRes.error);
-  const isClinicalStaff = workspaceCutoverEnabled ? hasClinicMembership : clinicalRole(role);
+  const isClinicalStaff = clinicalRole(role) || (workspaceCutoverEnabled && hasClinicMembership);
 
   return {
     greetingName: resolveGreetingName(user),

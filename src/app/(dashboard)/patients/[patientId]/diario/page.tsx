@@ -79,7 +79,7 @@ export default function PatientDiarioPage() {
       <Card className="border-neutral-200/55 shadow-premium-sm">
         <CardHeader className="border-b border-neutral-100/90 pb-4">
           <p className="text-title16 font-semibold text-text-primary">Registros recentes</p>
-          <p className="mt-1 text-small12 text-text-secondary">Fonte: Supabase · escrita pelo paciente em /meu-plano</p>
+          <p className="mt-1 text-small12 text-text-secondary">Registos que o paciente faz no portal «Meu plano».</p>
         </CardHeader>
         <CardContent className="pt-5">
           {logs.length === 0 ? (

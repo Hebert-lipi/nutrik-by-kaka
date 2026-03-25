@@ -30,6 +30,7 @@ export function PlanMetaSection({
   onProfessionalNameChange,
   onProfessionalRegistrationChange,
   onPatientHeaderLabelChange,
+  planNameError,
   className,
 }: {
   name: string;
@@ -51,6 +52,7 @@ export function PlanMetaSection({
   onProfessionalNameChange: (v: string) => void;
   onProfessionalRegistrationChange: (v: string) => void;
   onPatientHeaderLabelChange: (v: string) => void;
+  planNameError?: string | null;
   className?: string;
 }) {
   const onPatientSelect = (id: string) => {
@@ -72,13 +74,25 @@ export function PlanMetaSection({
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-100/90 pb-4">
           <div>
             <p className="text-h4Extra tracking-tight text-text-primary">Dados gerais do plano</p>
-            <p className="mt-1 text-body14 text-text-secondary">Identificação clínica e status de publicação.</p>
+            <p className="mt-1 text-body14 text-text-secondary">
+              Comece pelo <span className="font-semibold text-text-primary">nome da dieta</span> — sem ele não é possível salvar nem publicar. Depois ajuste tipo, paciente e descrição.
+            </p>
           </div>
           <Chip tone={status === "published" ? "success" : "yellow"}>{status === "published" ? "Publicado" : "Rascunho"}</Chip>
         </CardHeader>
         <CardContent className="grid gap-6 pt-6 md:grid-cols-2">
           <div className="md:col-span-2">
-            <Input label="Nome do plano" placeholder="Ex.: Plano hipoproteico — fase 1" value={name} onChange={(e) => onNameChange(e.target.value)} />
+            <Input
+              id="nutrik-plan-name-input"
+              label="Nome da dieta (obrigatório)"
+              placeholder="Ex.: Plano hipoproteico — fase 1"
+              value={name}
+              error={planNameError ?? undefined}
+              onChange={(e) => onNameChange(e.target.value)}
+            />
+            <p className="mt-1.5 text-[11px] font-semibold leading-relaxed text-text-muted">
+              Este nome identifica o plano na sua biblioteca e nos documentos. Se estiver vazio, os botões Salvar rascunho e Publicar não conseguem gravar.
+            </p>
           </div>
           <div className="md:col-span-2 space-y-2">
             <label htmlFor="plan-desc" className="block text-small12 font-bold uppercase tracking-wide text-text-muted">

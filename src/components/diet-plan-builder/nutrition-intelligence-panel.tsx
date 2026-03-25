@@ -11,6 +11,14 @@ import { Chip } from "@/components/ui/chip";
 const fieldClass =
   "h-10 w-full rounded-xl border border-neutral-200/90 bg-bg-0 px-3 text-sm font-semibold text-text-primary shadow-sm outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/15";
 
+const MISSING_FIELD_LABELS: Record<string, string> = {
+  sexo: "sexo (use a ficha do paciente ou confirme no plano)",
+  idade: "idade em anos",
+  peso: "peso em kg",
+  altura: "altura em cm",
+  atividade: "nível de atividade física (menu «Atividade»)",
+};
+
 function pctBadge(p: number): { label: string; tone: "success" | "yellow" | "orange" } {
   if (p >= 95 && p <= 105) return { label: "Dentro da meta", tone: "success" };
   if (p < 95) return { label: "Abaixo da meta", tone: "yellow" };
@@ -147,15 +155,23 @@ export function NutritionIntelligencePanel({
   return (
     <Card className="border-secondary/20 bg-gradient-to-br from-secondary/[0.06] via-bg-0 to-neutral-50/40 shadow-premium-sm">
       <CardHeader className="border-b border-neutral-100/90 pb-4">
-        <p className="text-title16 font-semibold text-text-primary">Painel nutricional inteligente</p>
+        <p className="text-title16 font-semibold text-text-primary">Metas e comparação com o plano</p>
         <p className="mt-1 text-small12 font-semibold text-text-secondary">
-          Meta calórica e macronutrientes alvo comparados com o prescrito em tempo real.
+          Aqui calculamos a meta de energia (TMB/GET) e macronutrientes com base nos dados do paciente e nas opções que você escolher. O prescrito é a soma do que está nas refeições — assim você vê se o plano se aproxima da meta.
         </p>
       </CardHeader>
       <CardContent className="space-y-5 pt-5">
         {engine.missing.length > 0 ? (
           <div className="rounded-xl border border-amber-300/60 bg-amber-50/90 px-4 py-3 text-small12 font-semibold text-text-secondary">
-            Complete estes dados para cálculo total: {engine.missing.join(", ")}.
+            <p className="font-bold text-text-primary">Para calcular TMB, GET e metas, falta:</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              {engine.missing.map((key) => (
+                <li key={key}>{MISSING_FIELD_LABELS[key] ?? key}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[11px] font-semibold text-text-muted">
+              Dica: com paciente vinculado, sexo, idade, peso e altura costumam vir da ficha — confira o perfil do paciente se algo vier vazio.
+            </p>
           </div>
         ) : null}
 
@@ -285,7 +301,9 @@ export function NutritionIntelligencePanel({
             </div>
           </div>
         ) : (
-          <p className="text-small12 font-semibold text-text-muted">Preencha os dados mínimos para gerar meta e comparação com o prescrito.</p>
+          <p className="text-small12 font-semibold text-text-muted">
+            Preencha sexo, idade, peso, altura (conforme a fórmula escolhida), atividade e objetivo acima. Enquanto faltar algum item essencial, não geramos meta calórica nem a comparação com o prescrito.
+          </p>
         )}
       </CardContent>
     </Card>

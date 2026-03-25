@@ -8,7 +8,16 @@ import { cn } from "@/lib/utils";
 import type { DraftPlanMeal } from "@/lib/draft-storage";
 import { groupMealsByPeriod, MEAL_PERIOD_ORDER, mealPeriodLabel } from "@/lib/clinical/meal-period";
 import type { MealDifficulty } from "@/lib/supabase/patient-adherence-db";
-import { usePatientAdherenceSupabase } from "@/hooks/use-patient-adherence-supabase";
+import {
+  usePatientAdherenceSupabase,
+  type PatientAdherenceController,
+} from "@/hooks/use-patient-adherence-supabase";
+import {
+  mealDayStatusForView,
+  minutesFromDate,
+  STATUS_LABEL,
+} from "@/lib/clinical/patient-portal-meal-status";
+import { todayPortalLogDate } from "@/lib/clinical/patient-portal-dates";
 
 function formatOptionLine(meal: DraftPlanMeal) {
   return meal.groups.flatMap((g) =>
@@ -29,46 +38,6 @@ const DIFFICULTY_LABEL: Record<MealDifficulty, string> = {
   hard: "Difícil",
 };
 
-const SCHEDULE_GRACE_MINUTES = 15;
-
-function todayLogDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function parseMealTimeToMinutes(raw: string): number | null {
-  const t = raw.trim();
-  const m = t.match(/^(\d{1,2})\s*[:hH]\s*(\d{2})/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) return null;
-  return h * 60 + min;
-}
-
-function minutesFromDate(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes();
-}
-
-type DayMealStatus = "completed" | "pending" | "overdue";
-
-function mealDayStatus(completed: boolean, mealTimeRaw: string, nowMinutes: number): DayMealStatus {
-  if (completed) return "completed";
-  const sched = parseMealTimeToMinutes(mealTimeRaw);
-  if (sched === null) return "pending";
-  if (nowMinutes > sched + SCHEDULE_GRACE_MINUTES) return "overdue";
-  return "pending";
-}
-
-const STATUS_LABEL: Record<DayMealStatus, string> = {
-  completed: "Concluído",
-  pending: "Pendente",
-  overdue: "Atrasado",
-};
-
 export function PlanMealsByPeriod({
   meals,
   planName,
@@ -79,6 +48,9 @@ export function PlanMealsByPeriod({
   adherence,
   planUpdate,
   suppressIntroHeader,
+  viewLogDate,
+  adherenceOverride,
+  hideDayProgressBanner,
 }: {
   meals: DraftPlanMeal[];
   planName: string;
@@ -94,9 +66,16 @@ export function PlanMealsByPeriod({
   };
   /** Cabeçalho do plano (nome, atualização) renderizado na página pai */
   suppressIntroHeader?: boolean;
+  /** Dia do registo (YYYY-MM-DD). Por omissão = hoje no dispositivo. */
+  viewLogDate?: string;
+  /** Quando definido, usa este controlador em vez de criar outro hook (evita pedidos duplicados). */
+  adherenceOverride?: PatientAdherenceController | null;
+  hideDayProgressBanner?: boolean;
 }) {
   const grouped = React.useMemo(() => groupMealsByPeriod(meals), [meals]);
-  const logDate = React.useMemo(() => todayLogDate(), []);
+  const todayYmd = React.useMemo(() => todayPortalLogDate(), []);
+  const logDate = viewLogDate ?? todayYmd;
+  const viewIsToday = logDate === todayYmd;
   const enabled = Boolean(adherence?.patientId && adherence?.planId);
 
   const [nowTick, setNowTick] = React.useState(() => Date.now());
@@ -107,24 +86,13 @@ export function PlanMealsByPeriod({
 
   const nowMinutes = React.useMemo(() => minutesFromDate(new Date(nowTick)), [nowTick]);
 
-  const adh = usePatientAdherenceSupabase(adherence?.patientId, adherence?.planId, logDate, enabled);
+  const internalAdh = usePatientAdherenceSupabase(adherence?.patientId, adherence?.planId, logDate, enabled && !adherenceOverride);
+  const adh = adherenceOverride ?? internalAdh;
 
   const completedCount = React.useMemo(() => {
     if (!enabled) return 0;
     return meals.filter((m) => Boolean(adh.mealState[m.id]?.completed)).length;
   }, [meals, adh.mealState, enabled]);
-
-  const { pendingCount, overdueCount } = React.useMemo(() => {
-    let pending = 0;
-    let overdue = 0;
-    for (const m of meals) {
-      const done = Boolean(enabled && adh.mealState[m.id]?.completed);
-      const st = mealDayStatus(done, m.time, nowMinutes);
-      if (st === "pending") pending += 1;
-      else if (st === "overdue") overdue += 1;
-    }
-    return { pendingCount: pending, overdueCount: overdue };
-  }, [meals, enabled, adh.mealState, nowMinutes]);
 
   const totalMeals = meals.length;
   const progressPct = totalMeals ? Math.round((completedCount / totalMeals) * 100) : 0;
@@ -139,7 +107,7 @@ export function PlanMealsByPeriod({
     : null;
 
   return (
-    <div className={cn("space-y-10", className)}>
+    <div className={cn("touch-manipulation space-y-6 sm:space-y-8 md:space-y-10", className)}>
       {suppressIntroHeader ? <h2 className="sr-only">{planName}</h2> : null}
       {!suppressIntroHeader ? (
         <div className="text-center sm:text-left">
@@ -166,8 +134,8 @@ export function PlanMealsByPeriod({
                 <Button
                   type="button"
                   variant="primary"
-                  size="sm"
-                  className="rounded-full px-5"
+                  size="md"
+                  className="min-h-11 w-full rounded-full px-5 sm:min-h-9 sm:w-auto"
                   disabled={planUpdate.busy}
                   onClick={() => planUpdate.onRefresh()}
                 >
@@ -205,17 +173,19 @@ export function PlanMealsByPeriod({
         </div>
       )}
 
-      {totalMeals > 0 ? (
+      {totalMeals > 0 && !hideDayProgressBanner ? (
         <div className="overflow-hidden rounded-[1.25rem] border border-neutral-200/70 bg-white px-5 py-5 shadow-[0_20px_50px_-28px_rgba(15,23,42,0.22)] ring-1 ring-black/[0.03] md:px-6 md:py-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Progresso de hoje</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                {viewIsToday ? "Progresso de hoje" : "Progresso neste dia"}
+              </p>
               <p className="mt-1.5 text-[17px] font-semibold tracking-tight text-text-primary">
                 Você concluiu{" "}
                 <span className="text-secondary">
                   {completedCount} de {totalMeals}
                 </span>{" "}
-                refeições hoje
+                {viewIsToday ? "refeições hoje" : "refeições neste dia"}
               </p>
             </div>
             <p className="text-2xl font-semibold tabular-nums tracking-tight text-secondary">{progressPct}%</p>
@@ -238,29 +208,6 @@ export function PlanMealsByPeriod({
         </div>
       ) : null}
 
-      {totalMeals > 0 ? (
-        <Card className="border-neutral-200/60 bg-white shadow-[0_16px_40px_-28px_rgba(15,23,42,0.18)] ring-1 ring-black/[0.03]">
-          <CardHeader className="border-b border-neutral-100 pb-4 pt-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">Resumo do dia</p>
-            <p className="mt-1 text-title16 font-semibold text-text-primary">Status das refeições</p>
-          </CardHeader>
-          <CardContent className="grid gap-3 pt-5 sm:grid-cols-3">
-            <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/50 px-4 py-4 text-center sm:text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/80">Concluídas</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums text-emerald-900">{completedCount}</p>
-            </div>
-            <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/60 px-4 py-4 text-center sm:text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Pendentes</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums text-text-primary">{pendingCount}</p>
-            </div>
-            <div className="rounded-2xl border border-rose-200/70 bg-rose-50/50 px-4 py-4 text-center sm:text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-800/85">Atrasadas</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums text-rose-900">{overdueCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
       {meals.length === 0 ? (
         <Card className="border-dashed border-neutral-200/90 bg-neutral-50/30">
           <CardContent className="py-16 text-center text-[15px] leading-relaxed text-text-secondary">
@@ -272,24 +219,26 @@ export function PlanMealsByPeriod({
           const list = grouped.get(period);
           if (!list?.length) return null;
           return (
-            <section key={period} className="space-y-5">
-              <h2 className="text-lg font-semibold tracking-tight text-text-primary">{mealPeriodLabel(period)}</h2>
-              <div className="grid gap-5 sm:grid-cols-2">
+            <section key={period} className="relative isolate space-y-4 sm:space-y-5">
+              {/* Sem tracking-tight: no iOS/WebKit costuma causar “dupla”/fantasma com fixed + blur por baixo. */}
+              <h2 className="text-[1.05rem] font-semibold text-text-primary sm:text-lg">{mealPeriodLabel(period)}</h2>
+              <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2">
                 {list.map((meal) => {
                   const done = Boolean(enabled && adh.mealState[meal.id]?.completed);
-                  const status = mealDayStatus(done, meal.time, nowMinutes);
+                  const status = mealDayStatusForView(done, meal.time, nowMinutes, viewIsToday);
                   const statusChipTone =
                     status === "completed" ? "success" : status === "overdue" ? "orange" : "muted";
                   return (
                     <Card
                       key={meal.id}
                       className={cn(
-                        "overflow-hidden border transition-all duration-300 ease-out",
+                        "overflow-hidden rounded-3xl border transition-all duration-300 ease-out",
                         status === "completed" &&
-                          "border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-white shadow-[0_20px_44px_-30px_rgba(16,185,129,0.35)] ring-1 ring-emerald-100/60",
-                        status === "pending" && "border-neutral-200/70 bg-white shadow-[0_16px_36px_-28px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.03]",
+                          "border-emerald-200/70 bg-gradient-to-b from-emerald-50/90 to-white shadow-[0_24px_50px_-32px_rgba(34,110,72,0.22)] ring-1 ring-emerald-100/50",
+                        status === "pending" &&
+                          "border-neutral-200/60 bg-white shadow-[0_20px_44px_-34px_rgba(15,23,42,0.1)] ring-1 ring-black/[0.025]",
                         status === "overdue" &&
-                          "border-rose-200/85 bg-gradient-to-b from-rose-50/70 to-white shadow-[0_20px_44px_-30px_rgba(244,63,94,0.2)] ring-1 ring-rose-100/70",
+                          "border-rose-200/75 bg-gradient-to-b from-rose-50/75 to-white shadow-[0_24px_48px_-32px_rgba(225,29,72,0.14)] ring-1 ring-rose-100/60",
                       )}
                     >
                       <CardHeader className="border-b border-neutral-100/90 pb-4">
@@ -337,12 +286,14 @@ export function PlanMealsByPeriod({
                               done ? "border-emerald-200/80 bg-emerald-50/40" : "border-neutral-200/70 bg-neutral-50/40",
                             )}
                           >
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-secondary">Seu registro hoje</p>
-                            <label className="mt-2.5 flex cursor-pointer items-center gap-3 text-[13px] font-semibold text-text-primary">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-secondary">
+                              {viewIsToday ? "Seu registro hoje" : "Registro deste dia"}
+                            </p>
+                            <label className="mt-2.5 flex min-h-11 cursor-pointer items-center gap-3 text-[14px] font-semibold text-text-primary sm:min-h-0 sm:text-[13px]">
                               <input
                                 type="checkbox"
                                 className={cn(
-                                  "h-[1.125rem] w-[1.125rem] shrink-0 rounded border-neutral-300 text-primary focus:ring-primary/25",
+                                  "h-5 w-5 shrink-0 rounded border-2 border-neutral-300 text-primary focus:ring-primary/25 sm:h-[1.125rem] sm:w-[1.125rem] sm:border",
                                   done && "scale-105",
                                 )}
                                 checked={done}
@@ -358,7 +309,7 @@ export function PlanMealsByPeriod({
                               </label>
                               <select
                                 id={`diff-${meal.id}`}
-                                className="mt-1.5 w-full rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5 text-[13px] font-semibold text-text-primary shadow-sm"
+                                className="mt-1.5 min-h-12 w-full rounded-xl border border-neutral-200/80 bg-white px-3 py-3 text-base font-semibold text-text-primary shadow-sm sm:min-h-0 sm:py-2.5 sm:text-[13px]"
                                 value={adh.mealState[meal.id]?.difficulty ?? "none"}
                                 onChange={(e) => {
                                   void adh.setMealDifficulty(meal.id, e.target.value as MealDifficulty);
@@ -395,7 +346,7 @@ export function PlanMealsByPeriod({
           <CardContent className="pt-5">
             <textarea
               rows={5}
-              className="w-full resize-y rounded-xl border border-neutral-200/90 bg-neutral-50/40 px-4 py-3.5 text-[15px] leading-relaxed text-text-primary shadow-inner outline-none placeholder:text-neutral-400 focus:border-secondary/35 focus:bg-white focus:ring-2 focus:ring-secondary/15"
+              className="min-h-[8.5rem] w-full resize-y rounded-xl border border-neutral-200/90 bg-neutral-50/40 px-4 py-3.5 text-[16px] leading-relaxed text-text-primary shadow-inner outline-none placeholder:text-neutral-400 focus:border-secondary/35 focus:bg-white focus:ring-2 focus:ring-secondary/15 sm:min-h-0 sm:text-[15px]"
               placeholder="Ex.: senti mais fome no lanche, treino mais leve, experimentei substituir o arroz…"
               value={dailyDraft}
               onChange={(e) => setDailyDraft(e.target.value)}
@@ -403,7 +354,10 @@ export function PlanMealsByPeriod({
                 if (dailyDraft !== adh.dailyNote) void adh.saveDailyNote(dailyDraft);
               }}
             />
-            <p className="mt-2.5 text-[11px] font-medium text-text-muted">Salvo ao sair do campo · {logDate}</p>
+            <p className="mt-2.5 text-[11px] font-medium text-text-muted">
+              Salvo ao sair do campo ·{" "}
+              {new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" }).format(new Date(`${logDate}T12:00:00`))}
+            </p>
           </CardContent>
         </Card>
       ) : null}

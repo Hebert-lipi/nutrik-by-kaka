@@ -10,12 +10,20 @@ import {
   upsertPatientPlanAck,
 } from "@/lib/supabase/plan-versions";
 import { PlanMealsByPeriod } from "@/components/patient-portal/plan-meals-by-period";
+import {
+  PatientCalendarAndPeriod,
+  PatientDashboardHero,
+  PatientWeeklyProgressChart,
+} from "@/components/patient-portal/patient-meu-plano-dashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { getLastPlanRevisionAt } from "@/lib/clinical/patient-plan";
 import { buildShoppingListFromPlan, groupShoppingByCategory } from "@/lib/clinical/shopping-list";
 import { fetchShoppingSnapshot } from "@/lib/supabase/shopping-lists";
 import { recordPerfMetric } from "@/lib/perf/perf-metrics";
+import { todayPortalLogDate } from "@/lib/clinical/patient-portal-dates";
+import { minutesFromDate, summarizeDayMeals } from "@/lib/clinical/patient-portal-meal-status";
+import { usePatientAdherenceSupabase } from "@/hooks/use-patient-adherence-supabase";
 
 const POLL_MS = 22_000;
 
@@ -30,6 +38,14 @@ export default function MeuPlanoPage() {
   const [refreshBusy, setRefreshBusy] = React.useState(false);
   const [shoppingSnapshotItems, setShoppingSnapshotItems] = React.useState<ReturnType<typeof buildShoppingListFromPlan>>([]);
   const [shoppingChecked, setShoppingChecked] = React.useState<Record<string, boolean>>({});
+  /** Lista de compras abaixo da dobra: pequeno atraso no mount para priorizar LCP no mobile/PWA. */
+  const [shoppingReady, setShoppingReady] = React.useState(false);
+  const [selectedYmd, setSelectedYmd] = React.useState(() => todayPortalLogDate());
+  const [nowTick, setNowTick] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const refreshVersionMeta = React.useCallback(async (patientId: string, planId: string) => {
     const [latest, ack] = await Promise.all([
@@ -93,6 +109,14 @@ export default function MeuPlanoPage() {
     };
   }, [portal]);
 
+  const portalOkKey = portal?.kind === "ok" ? `${portal.patient.id}-${portal.plan.id}` : "";
+  React.useEffect(() => {
+    setShoppingReady(false);
+    if (portal?.kind !== "ok") return;
+    const id = window.setTimeout(() => setShoppingReady(true), 320);
+    return () => window.clearTimeout(id);
+  }, [portal?.kind, portalOkKey]);
+
   const shoppingItemsFromPlan = React.useMemo(() => {
     if (portal?.kind !== "ok") return [] as ReturnType<typeof buildShoppingListFromPlan>;
     return buildShoppingListFromPlan(portal.plan);
@@ -115,6 +139,28 @@ export default function MeuPlanoPage() {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     recordPerfMetric("ui.open.portal_meu_plano", now - mountAtRef.current, portal.kind);
   }, [portal]);
+
+  const portalOk = portal?.kind === "ok" ? portal : null;
+  const adherencePatientId = portalOk?.patient.id;
+  const adherencePlanId = portalOk?.plan.id;
+  const planMealsForAdherence = portalOk?.plan.meals ?? [];
+  const adherenceEnabled = Boolean(portalOk);
+
+  const adherence = usePatientAdherenceSupabase(adherencePatientId, adherencePlanId, selectedYmd, adherenceEnabled);
+  const viewIsToday = selectedYmd === todayPortalLogDate();
+  const nowMinutes = React.useMemo(() => minutesFromDate(new Date(nowTick)), [nowTick]);
+  const { completedCount, pendingCount, overdueCount, progressPct } = React.useMemo(
+    () =>
+      summarizeDayMeals(planMealsForAdherence, adherence.mealState, nowMinutes, viewIsToday, adherenceEnabled),
+    [planMealsForAdherence, adherence.mealState, nowMinutes, viewIsToday, adherenceEnabled],
+  );
+  const selectedDateDisplay = React.useMemo(
+    () =>
+      new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(
+        new Date(`${selectedYmd}T12:00:00`),
+      ),
+    [selectedYmd],
+  );
 
   if (email === undefined) {
     return (
@@ -139,7 +185,7 @@ export default function MeuPlanoPage() {
       <Card className="border-orange/25 bg-orange/[0.06]">
         <CardContent className="py-10 text-center text-body14 text-text-secondary">
           {loadError}
-          <p className="mt-3 text-small12 text-text-muted">Confira migrations em supabase/migrations (adesão, versões, ack).</p>
+          <p className="mt-3 text-small12 text-text-muted">Se o problema continuar, contacte a sua nutricionista ou o suporte da clínica.</p>
         </CardContent>
       </Card>
     );
@@ -200,9 +246,6 @@ export default function MeuPlanoPage() {
     latestVersionAt && (!ackAt || new Date(latestVersionAt).getTime() > new Date(ackAt).getTime()),
   );
   const patientFirstName = patient.name.trim().split(/\s+/)[0] ?? patient.name;
-  const planUpdatedLabel = displayUpdatedIso
-    ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short" }).format(new Date(displayUpdatedIso))
-    : null;
 
   const handleRefreshPlan = async () => {
     setRefreshBusy(true);
@@ -219,33 +262,29 @@ export default function MeuPlanoPage() {
   };
 
   return (
-    <div className="space-y-10 pb-6">
-      <header className="overflow-hidden rounded-[1.35rem] border border-neutral-200/70 bg-white px-5 py-6 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.25)] ring-1 ring-black/[0.03] md:px-8 md:py-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-muted">Acompanhamento diário</p>
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-text-primary md:text-[1.75rem]">{plan.name}</h1>
-            <p className="text-[15px] text-text-secondary">
-              Olá, <span className="font-semibold text-text-primary">{patientFirstName}</span> — seu plano ativo para hoje.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-            <Chip tone="success" className="font-semibold">
-              Plano ativo
-            </Chip>
-            {planUpdatedLabel ? (
-              <p className="max-w-[16rem] text-right text-[12px] font-medium leading-snug text-text-muted sm:text-right">
-                Última atualização do plano
-                <span className="mt-0.5 block font-semibold text-text-secondary">{planUpdatedLabel}</span>
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <p className="mt-5 border-t border-neutral-100 pt-5 text-[13px] leading-relaxed text-text-secondary">
-          Este espaço foi pensado para o seu dia a dia: marque refeições, veja o que falta e deixe observações. Em caso de dúvida
-          clínica, fale com sua nutricionista.
-        </p>
-      </header>
+    <div className="touch-manipulation space-y-6 sm:space-y-8 md:space-y-10">
+      <PatientDashboardHero
+        firstName={patientFirstName}
+        planName={plan.name}
+        progressPct={progressPct}
+        completedCount={completedCount}
+        pendingCount={pendingCount}
+        overdueCount={overdueCount}
+        totalMeals={plan.meals.length}
+        selectedDateDisplay={selectedDateDisplay}
+        viewIsToday={viewIsToday}
+      />
+
+      <PatientCalendarAndPeriod selectedYmd={selectedYmd} onSelectYmd={setSelectedYmd} />
+
+      <PatientWeeklyProgressChart
+        patientId={patient.id}
+        planId={plan.id}
+        mealsCount={plan.meals.length}
+        enabled={Boolean(plan.meals.length)}
+        variant="embed"
+        anchorId="seu-progresso-semanal"
+      />
 
       <PlanMealsByPeriod
         meals={plan.meals}
@@ -253,7 +292,15 @@ export default function MeuPlanoPage() {
         subtitle="Sua rotina"
         lastUpdatedIso={displayUpdatedIso}
         suppressIntroHeader
+        headerBadge={
+          <Chip tone="success" className="font-semibold">
+            Plano ativo
+          </Chip>
+        }
+        viewLogDate={selectedYmd}
         adherence={{ patientId: patient.id, planId: plan.id }}
+        adherenceOverride={adherence}
+        hideDayProgressBanner
         planUpdate={{
           pending: updatePending,
           onRefresh: handleRefreshPlan,
@@ -263,7 +310,7 @@ export default function MeuPlanoPage() {
 
       {patient.portalCanShopping !== false ? (
         <Card className="border-neutral-200/60 bg-white shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] ring-1 ring-black/[0.03]">
-          <CardContent className="space-y-5 px-5 py-6 md:px-6 md:py-7">
+          <CardContent className="space-y-5 px-4 py-5 sm:px-5 sm:py-6 md:px-6 md:py-7">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">Organização</p>
@@ -273,7 +320,13 @@ export default function MeuPlanoPage() {
                 Uso pessoal · marque o que já comprou
               </Chip>
             </div>
-            {groupedShopping.length === 0 ? (
+            {!shoppingReady ? (
+              <div className="space-y-3" aria-hidden>
+                <div className="h-4 w-1/3 animate-pulse rounded bg-neutral-200/80" />
+                <div className="h-24 animate-pulse rounded-xl bg-neutral-100/90" />
+                <p className="text-center text-[12px] font-medium text-text-muted">A preparar lista de compras…</p>
+              </div>
+            ) : groupedShopping.length === 0 ? (
               <p className="text-[14px] leading-relaxed text-text-secondary">
                 Sua nutricionista ainda não definiu itens suficientes para montar a lista de compras.
               </p>
@@ -293,12 +346,12 @@ export default function MeuPlanoPage() {
                         const checked = Boolean(shoppingChecked[key]);
                         return (
                           <li key={key}>
-                            <label className="flex cursor-pointer items-start gap-3.5 px-4 py-3.5 transition-colors hover:bg-white/80 md:px-5">
+                            <label className="flex min-h-12 cursor-pointer items-start gap-3.5 px-4 py-3.5 transition-colors hover:bg-white/80 md:min-h-0 md:px-5">
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleShoppingItem(key)}
-                                className="mt-0.5 h-[1.125rem] w-[1.125rem] shrink-0 rounded border-neutral-300 text-secondary focus:ring-secondary/30"
+                                className="mt-1 h-5 w-5 shrink-0 rounded border-2 border-neutral-300 text-secondary focus:ring-secondary/30 sm:mt-0.5 sm:h-[1.125rem] sm:w-[1.125rem] sm:border"
                                 aria-label={`Marcar ${item.name}`}
                               />
                               <span className="min-w-0 flex-1">

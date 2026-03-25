@@ -69,12 +69,12 @@ function PatientsPageContent() {
       <PageHeader
         eyebrow="Cadastro"
         title="Pacientes"
-        description="Diretório salvo no Supabase — vinculado à sua conta. Use o mesmo e-mail do paciente no login para ele acessar /meu-plano."
+        description="Lista guardada na sua conta Nutrik. Use no cadastro o mesmo e-mail que o paciente usa no login — assim ele acede ao portal «Meu plano»."
       />
 
       {error ? (
         <p className="rounded-xl border border-orange/30 bg-orange/10 px-4 py-3 text-small12 font-semibold text-text-secondary">
-          {error} — confira se aplicou a migration SQL no projeto Supabase (veja docs/SUPABASE_SETUP.md).
+          {error} — verifique a internet ou tente mais tarde. Se repetir, contacte o suporte.
         </p>
       ) : null}
 
@@ -212,7 +212,7 @@ function PatientsPageContent() {
         open={removeId !== null}
         onClose={() => setRemoveId(null)}
         title="Remover paciente"
-        description="Esta ação remove o paciente e os planos vinculados a ele no Supabase (cascade)."
+        description="Esta ação remove o paciente e todos os planos alimentares associados a ele, de forma permanente."
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={() => setRemoveId(null)}>

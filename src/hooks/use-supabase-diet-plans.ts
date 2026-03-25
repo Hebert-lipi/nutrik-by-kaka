@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/plan-mapper";
 import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
 import { measurePerf } from "@/lib/perf/perf-metrics";
+import { humanizeSupabaseSaveError, withTransientRetries } from "@/lib/supabase/save-reliability";
 
 /** Não falha o salvamento se só o histórico de versões falhar — `diet_plans` já foi gravado. */
 async function safeInsertDietPlanVersion(
@@ -54,10 +55,12 @@ function emitPlansState() {
   for (const cb of plansSubscribers) cb(snap);
 }
 
-async function getCurrentUserId(): Promise<string | null> {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) return null;
-  return data.session?.user?.id ?? null;
+/** Sessão em cookie pode estar a refrescar — `getUser` força validação com o servidor. */
+async function resolveAuthUserId(): Promise<string | null> {
+  const { data: sessionWrap } = await supabase.auth.getSession();
+  if (sessionWrap.session?.user?.id) return sessionWrap.session.user.id;
+  const { data: userWrap } = await supabase.auth.getUser();
+  return userWrap.user?.id ?? null;
 }
 
 export type SavePlanFromBuilderMode = "draft" | "publish";
@@ -83,7 +86,7 @@ export function useSupabaseDietPlans() {
         emitPlansState();
       }
       plansErrorState = null;
-      const userId = await getCurrentUserId();
+      const userId = await resolveAuthUserId();
       if (!userId) {
         plansCache = { data: [], fetchedAt: Date.now() };
         plansLoadingState = false;
@@ -143,8 +146,8 @@ export function useSupabaseDietPlans() {
 
   const upsertPlan = React.useCallback(
     async (plan: DraftPlan) => {
-      const userId = await getCurrentUserId();
-      if (!userId) throw new Error("Não autenticado");
+      const userId = await resolveAuthUserId();
+      if (!userId) throw new Error(humanizeSupabaseSaveError("Not authenticated"));
 
       const normalized = normalizePlan(plan);
       const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
@@ -176,8 +179,12 @@ export function useSupabaseDietPlans() {
         published_structure_json: publishedStructureForRow,
       };
 
-      const { error: upErr } = await measurePerf("dietPlans.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }));
-      if (upErr) throw new Error(upErr.message);
+      await measurePerf("dietPlans.upsert", async () => {
+        await withTransientRetries("dietPlans.upsert", async () => {
+          const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
+          if (upErr) throw new Error(humanizeSupabaseSaveError(upErr.message));
+        });
+      });
       await safeInsertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userId);
       await refresh(true);
     },
@@ -190,18 +197,27 @@ export function useSupabaseDietPlans() {
    */
   const savePlanFromBuilder = React.useCallback(
     async (plan: DraftPlan, mode: SavePlanFromBuilderMode = "draft") => {
-      const userId = await getCurrentUserId();
-      if (!userId) throw new Error("Não autenticado");
+      const userId = await resolveAuthUserId();
+      if (!userId) throw new Error(humanizeSupabaseSaveError("Not authenticated"));
 
       const normalized = normalizePlan(plan);
       const patientId = normalized.planKind === "patient_plan" ? normalized.linkedPatientId : null;
       const structure = draftPlanToStructure(normalized);
 
-      const { data: existing } = await supabase
-        .from("diet_plans")
-        .select("published_at,status,published_structure_json,structure_json")
-        .eq("id", plan.id)
-        .maybeSingle();
+      const existing = await measurePerf(
+        "dietPlans.saveFromBuilder.prefetch",
+        async () =>
+          withTransientRetries("dietPlans.saveFromBuilder.prefetch", async () => {
+            const { data, error: qErr } = await supabase
+              .from("diet_plans")
+              .select("published_at,status,published_structure_json,structure_json")
+              .eq("id", plan.id)
+              .maybeSingle();
+            if (qErr) throw new Error(humanizeSupabaseSaveError(qErr.message));
+            return data;
+          }),
+        plan.id,
+      );
 
       const ex = existing as
         | {
@@ -255,22 +271,42 @@ export function useSupabaseDietPlans() {
         published_structure_json: publishedStructureJson,
       };
 
-      const { error: upErr } = await measurePerf("dietPlans.saveFromBuilder.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }), mode);
-      if (upErr) throw new Error(upErr.message);
+      await measurePerf(
+        "dietPlans.saveFromBuilder.upsert",
+        async () => {
+          await withTransientRetries("dietPlans.saveFromBuilder.upsert", async () => {
+            const { error: upErr } = await supabase.from("diet_plans").upsert(row, { onConflict: "id" });
+            if (upErr) throw new Error(humanizeSupabaseSaveError(upErr.message));
+          });
+        },
+        mode,
+      );
 
       if (mode === "publish" && normalized.planKind === "patient_plan" && patientId) {
-        const { data: rpcData, error: rpcErr } = await measurePerf(
+        const rpcData = await measurePerf(
           "dietPlans.publish.rpc",
-          () =>
-            supabase.rpc("publish_diet_plan_for_patient", {
-              p_plan_id: normalized.id,
+          async () =>
+            withTransientRetries("dietPlans.publish.rpc", async () => {
+              const { data, error } = await supabase.rpc("publish_diet_plan_for_patient", {
+                p_plan_id: normalized.id,
+              });
+              if (error) throw new Error(humanizeSupabaseSaveError(error.message));
+              return data;
             }),
           "saveFromBuilder",
         );
-        if (rpcErr) throw new Error(rpcErr.message);
         const payload = rpcData as { ok?: boolean; error?: string } | null;
         if (!payload?.ok) {
-          throw new Error("Não foi possível publicar o plano para o paciente.");
+          const code = payload?.error ?? "unknown";
+          const msg =
+            code === "plan_requires_patient"
+              ? "Este plano precisa estar vinculado a um paciente para publicar."
+              : code === "forbidden"
+                ? "Sem permissão para publicar este plano."
+                : code === "plan_not_found"
+                  ? "Plano não encontrado."
+                  : "Não foi possível publicar o plano para o paciente.";
+          throw new Error(humanizeSupabaseSaveError(msg));
         }
       }
 
@@ -321,7 +357,7 @@ export function useSupabaseDietPlans() {
         throw new Error("Selecione um paciente neste plano no editor antes de publicar.");
       }
 
-      const uid = await getCurrentUserId();
+      const uid = await resolveAuthUserId();
 
       if (nextStatus === "published") {
         if (current.planKind === "patient_plan" && current.linkedPatientId) {
