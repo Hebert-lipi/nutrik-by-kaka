@@ -35,6 +35,72 @@ import { measurePerf } from "@/lib/perf/perf-metrics";
 const DND_MEAL_MIME = "application/x-nutrik-meal-id";
 const FALLBACK_PLAN_FOR_HOOKS = normalizePlan({});
 
+const EDITOR_RECOVERY_PREFIX = "nutrik-editor-recover-v1:";
+const EDITOR_RECOVERY_TTL_MS = 12 * 60 * 1000;
+
+function editorRecoveryKey(planId: string) {
+  return `${EDITOR_RECOVERY_PREFIX}${planId}`;
+}
+
+function persistEditorRecovery(plan: DraftPlan) {
+  try {
+    sessionStorage.setItem(
+      editorRecoveryKey(plan.id),
+      JSON.stringify({ savedAt: Date.now(), plan }),
+    );
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function readEditorRecovery(planId: string): DraftPlan | null {
+  try {
+    const raw = sessionStorage.getItem(editorRecoveryKey(planId));
+    if (!raw) return null;
+    const o = JSON.parse(raw) as { savedAt?: number; plan?: unknown };
+    if (typeof o.savedAt !== "number" || Date.now() - o.savedAt > EDITOR_RECOVERY_TTL_MS) {
+      sessionStorage.removeItem(editorRecoveryKey(planId));
+      return null;
+    }
+    if (!o.plan || typeof o.plan !== "object") return null;
+    const recovered = normalizePlan(o.plan);
+    return recovered.id === planId ? recovered : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearEditorRecovery(planId: string) {
+  try {
+    sessionStorage.removeItem(editorRecoveryKey(planId));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Releitura após gravar: evita trocar o editor por plano vazio por corrida / latência da API. */
+async function syncPlanAfterSave(
+  fetchPlanById: (id: string) => Promise<DraftPlan | null>,
+  planId: string,
+  fallback: DraftPlan,
+): Promise<DraftPlan> {
+  const delaysMs = [0, 280, 650, 1400];
+  for (let i = 0; i < delaysMs.length; i += 1) {
+    if (delaysMs[i]! > 0) {
+      await new Promise((r) => setTimeout(r, delaysMs[i]));
+    }
+    const fresh = await fetchPlanById(planId);
+    if (!fresh) continue;
+    const suspectEmpty = fallback.meals.length > 0 && fresh.meals.length === 0;
+    if (!suspectEmpty) return fresh;
+  }
+  console.warn(
+    "[Nutrik] Não foi possível confirmar o plano no servidor após salvar; mantendo cópia local enviada ao Supabase.",
+    { planId, mealsLocal: fallback.meals.length },
+  );
+  return normalizePlan(fallback);
+}
+
 function trimPlanForPersistence(plan: DraftPlan): DraftPlan {
   return {
     ...plan,
@@ -135,12 +201,24 @@ export function DietPlanBuilder({ mode, planId }: Props) {
       let cancelled = false;
       setLoaded(false);
       void (async () => {
+        const recovered = readEditorRecovery(planId);
         const found = await fetchPlanById(planId);
         if (cancelled) return;
         if (!found) {
-          setNotFound(true);
-          setPlan(null);
+          if (recovered) {
+            setNotFound(false);
+            setPlan(recovered);
+            clearEditorRecovery(planId);
+          } else {
+            setNotFound(true);
+            setPlan(null);
+          }
+        } else if (recovered && recovered.meals.length > found.meals.length) {
+          setNotFound(false);
+          setPlan(recovered);
+          clearEditorRecovery(planId);
         } else {
+          clearEditorRecovery(planId);
           setNotFound(false);
           setPlan(found);
         }
@@ -256,9 +334,12 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     setSavingMode("draft");
     try {
       const toSave = buildNextPersistedPlan(plan.status);
+      persistEditorRecovery(toSave);
       await measurePerf("ui.save_plan_draft.total", () => savePlanFromBuilder(toSave, "draft"));
-      const fresh = await fetchPlanById(toSave.id);
-      if (fresh) setPlan(fresh);
+      setPlan(normalizePlan(toSave));
+      const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
+      setPlan(merged);
+      if (mode !== "new") clearEditorRecovery(toSave.id);
       setVersionListKey((k) => k + 1);
       setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);
@@ -299,9 +380,12 @@ export function DietPlanBuilder({ mode, planId }: Props) {
     setSavingMode("publish");
     try {
       const toSave = buildNextPersistedPlan("published");
+      persistEditorRecovery(toSave);
       await measurePerf("ui.publish_plan.total", () => savePlanFromBuilder(toSave, "publish"));
-      const fresh = await fetchPlanById(toSave.id);
-      if (fresh) setPlan(fresh);
+      setPlan(normalizePlan(toSave));
+      const merged = await syncPlanAfterSave(fetchPlanById, toSave.id, toSave);
+      setPlan(merged);
+      if (mode !== "new") clearEditorRecovery(toSave.id);
       setVersionListKey((k) => k + 1);
       setLastSaved(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       if (mode === "new") router.replace(`/diet-plans/${toSave.id}/edit`);

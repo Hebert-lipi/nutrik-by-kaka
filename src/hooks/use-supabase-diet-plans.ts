@@ -16,6 +16,22 @@ import {
 import { insertDietPlanVersion } from "@/lib/supabase/plan-versions";
 import { measurePerf } from "@/lib/perf/perf-metrics";
 
+/** Não falha o salvamento se só o histórico de versões falhar — `diet_plans` já foi gravado. */
+async function safeInsertDietPlanVersion(
+  planId: string,
+  structure: ReturnType<typeof draftPlanToStructure>,
+  userId: string | null,
+) {
+  try {
+    await insertDietPlanVersion(planId, structure, userId);
+  } catch (e) {
+    console.error(
+      "[Nutrik] diet_plan_versions: não foi possível registrar revisão; o conteúdo do plano em diet_plans foi salvo.",
+      e,
+    );
+  }
+}
+
 const PLANS_CACHE_TTL_MS = 5 * 60_000;
 let plansCache: { data: DraftPlan[]; fetchedAt: number } | null = null;
 let inflightPlansRefresh: Promise<void> | null = null;
@@ -162,7 +178,7 @@ export function useSupabaseDietPlans() {
 
       const { error: upErr } = await measurePerf("dietPlans.upsert", () => supabase.from("diet_plans").upsert(row, { onConflict: "id" }));
       if (upErr) throw new Error(upErr.message);
-      await insertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userId);
+      await safeInsertDietPlanVersion(normalized.id, draftPlanToStructure(normalized), userId);
       await refresh(true);
     },
     [refresh],
@@ -258,7 +274,7 @@ export function useSupabaseDietPlans() {
         }
       }
 
-      await insertDietPlanVersion(normalized.id, structure, userId);
+      await safeInsertDietPlanVersion(normalized.id, structure, userId);
       await refresh(true);
     },
     [refresh],
@@ -275,7 +291,11 @@ export function useSupabaseDietPlans() {
             .maybeSingle(),
       id,
     );
-    if (qErr || !data) return null;
+    if (qErr) {
+      console.error("[Nutrik] fetchPlanById:", qErr.message);
+      return null;
+    }
+    if (!data) return null;
     return dietPlanRowToDraftPlan(data as DietPlanRow);
   }, []);
 

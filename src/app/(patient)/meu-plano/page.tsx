@@ -29,6 +29,7 @@ export default function MeuPlanoPage() {
   const [ackAt, setAckAt] = React.useState<string | null>(null);
   const [refreshBusy, setRefreshBusy] = React.useState(false);
   const [shoppingSnapshotItems, setShoppingSnapshotItems] = React.useState<ReturnType<typeof buildShoppingListFromPlan>>([]);
+  const [shoppingChecked, setShoppingChecked] = React.useState<Record<string, boolean>>({});
 
   const refreshVersionMeta = React.useCallback(async (patientId: string, planId: string) => {
     const [latest, ack] = await Promise.all([
@@ -101,6 +102,12 @@ export default function MeuPlanoPage() {
     () => groupShoppingByCategory(shoppingSnapshotItems.length > 0 ? shoppingSnapshotItems : shoppingItemsFromPlan),
     [shoppingSnapshotItems, shoppingItemsFromPlan],
   );
+
+  const shoppingListKey = React.useCallback((category: string, name: string, qty: string) => `${category}::${name}::${qty}`, []);
+
+  const toggleShoppingItem = React.useCallback((key: string) => {
+    setShoppingChecked((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   React.useEffect(() => {
     if (measuredRef.current || !portal || portal.kind !== "ok") return;
@@ -192,6 +199,10 @@ export default function MeuPlanoPage() {
   const updatePending = Boolean(
     latestVersionAt && (!ackAt || new Date(latestVersionAt).getTime() > new Date(ackAt).getTime()),
   );
+  const patientFirstName = patient.name.trim().split(/\s+/)[0] ?? patient.name;
+  const planUpdatedLabel = displayUpdatedIso
+    ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short" }).format(new Date(displayUpdatedIso))
+    : null;
 
   const handleRefreshPlan = async () => {
     setRefreshBusy(true);
@@ -208,20 +219,40 @@ export default function MeuPlanoPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] px-4 py-4 text-center md:px-6">
-        <p className="text-small12 font-bold uppercase tracking-wide text-secondary">Olá, {patient.name.split(" ")[0]}</p>
-        <p className="mt-1 text-body14 text-text-secondary">Este é o seu plano alimentar atual. Em caso de dúvida, fale com sua nutricionista.</p>
-        <Chip tone="success" className="mt-3 font-semibold">
-          Plano ativo
-        </Chip>
-      </div>
+    <div className="space-y-10 pb-6">
+      <header className="overflow-hidden rounded-[1.35rem] border border-neutral-200/70 bg-white px-5 py-6 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.25)] ring-1 ring-black/[0.03] md:px-8 md:py-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-muted">Acompanhamento diário</p>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-text-primary md:text-[1.75rem]">{plan.name}</h1>
+            <p className="text-[15px] text-text-secondary">
+              Olá, <span className="font-semibold text-text-primary">{patientFirstName}</span> — seu plano ativo para hoje.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+            <Chip tone="success" className="font-semibold">
+              Plano ativo
+            </Chip>
+            {planUpdatedLabel ? (
+              <p className="max-w-[16rem] text-right text-[12px] font-medium leading-snug text-text-muted sm:text-right">
+                Última atualização do plano
+                <span className="mt-0.5 block font-semibold text-text-secondary">{planUpdatedLabel}</span>
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <p className="mt-5 border-t border-neutral-100 pt-5 text-[13px] leading-relaxed text-text-secondary">
+          Este espaço foi pensado para o seu dia a dia: marque refeições, veja o que falta e deixe observações. Em caso de dúvida
+          clínica, fale com sua nutricionista.
+        </p>
+      </header>
 
       <PlanMealsByPeriod
         meals={plan.meals}
         planName={plan.name}
         subtitle="Sua rotina"
         lastUpdatedIso={displayUpdatedIso}
+        suppressIntroHeader
         adherence={{ patientId: patient.id, planId: plan.id }}
         planUpdate={{
           pending: updatePending,
@@ -231,27 +262,59 @@ export default function MeuPlanoPage() {
       />
 
       {patient.portalCanShopping !== false ? (
-        <Card className="border-neutral-200/70 bg-bg-0">
-          <CardContent className="space-y-4 py-5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-title16 font-semibold text-text-primary">Lista de compras</p>
-              <Chip tone="muted">Somente leitura</Chip>
+        <Card className="border-neutral-200/60 bg-white shadow-[0_20px_50px_-32px_rgba(15,23,42,0.18)] ring-1 ring-black/[0.03]">
+          <CardContent className="space-y-5 px-5 py-6 md:px-6 md:py-7">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">Organização</p>
+                <p className="mt-1 text-title16 font-semibold text-text-primary">Lista de compras</p>
+              </div>
+              <Chip tone="muted" className="shrink-0 font-semibold">
+                Uso pessoal · marque o que já comprou
+              </Chip>
             </div>
             {groupedShopping.length === 0 ? (
-              <p className="text-small12 text-text-secondary">
+              <p className="text-[14px] leading-relaxed text-text-secondary">
                 Sua nutricionista ainda não definiu itens suficientes para montar a lista de compras.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 {groupedShopping.map((group) => (
-                  <section key={group.category} className="rounded-xl border border-neutral-200/70 bg-neutral-50/50 px-3 py-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">{group.category}</p>
-                    <ul className="mt-2 space-y-1 text-small12 text-text-secondary">
-                      {group.items.map((item) => (
-                        <li key={`${group.category}-${item.name}`}>
-                          <span className="font-semibold text-text-primary">{item.name}</span> — {item.quantityLabel}
-                        </li>
-                      ))}
+                  <section
+                    key={group.category}
+                    className="overflow-hidden rounded-2xl border border-neutral-100 bg-neutral-50/40 ring-1 ring-black/[0.02]"
+                  >
+                    <div className="border-b border-neutral-100/90 bg-white/70 px-4 py-3 md:px-5">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-secondary">{group.category}</p>
+                    </div>
+                    <ul className="divide-y divide-neutral-100/90">
+                      {group.items.map((item) => {
+                        const key = shoppingListKey(group.category, item.name, item.quantityLabel);
+                        const checked = Boolean(shoppingChecked[key]);
+                        return (
+                          <li key={key}>
+                            <label className="flex cursor-pointer items-start gap-3.5 px-4 py-3.5 transition-colors hover:bg-white/80 md:px-5">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleShoppingItem(key)}
+                                className="mt-0.5 h-[1.125rem] w-[1.125rem] shrink-0 rounded border-neutral-300 text-secondary focus:ring-secondary/30"
+                                aria-label={`Marcar ${item.name}`}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span
+                                  className={`block text-[15px] font-semibold leading-snug ${
+                                    checked ? "text-text-muted line-through decoration-neutral-300" : "text-text-primary"
+                                  }`}
+                                >
+                                  {item.name}
+                                </span>
+                                <span className="mt-0.5 block text-[13px] font-medium text-text-secondary">{item.quantityLabel}</span>
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </section>
                 ))}
