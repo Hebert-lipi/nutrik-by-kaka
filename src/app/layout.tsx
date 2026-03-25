@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: "/images/nutrik-logo.png",
-    apple: "/images/nutrik-logo.png",
+    icon: "/icons/icon-512.png",
+    apple: "/icons/icon-192.png",
   },
 };
 
