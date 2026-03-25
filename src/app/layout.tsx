@@ -13,6 +13,17 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Nutrik",
   description: "Nutrik by Kaká",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#226E48",
+  appleWebApp: {
+    capable: true,
+    title: "Nutrik",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: "/images/nutrik-logo.png",
+    apple: "/images/nutrik-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

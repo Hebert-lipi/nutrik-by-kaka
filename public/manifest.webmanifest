@@ -1,0 +1,23 @@
+{
+  "name": "Nutrik by Kaká",
+  "short_name": "Nutrik",
+  "description": "Portal do paciente Nutrik by Kaká",
+  "start_url": "/meu-plano",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#226E48",
+  "icons": [
+    {
+      "src": "/images/nutrik-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/nutrik-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
